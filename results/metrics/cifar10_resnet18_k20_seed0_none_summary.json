@@ -1,0 +1,23 @@
+{
+  "dataset": "cifar10",
+  "model": "resnet18_cifar",
+  "augmentation": "none",
+  "split_path": "data/splits/cifar10/k20_seed0.json",
+  "val_split_path": "data/splits/cifar10/fixed_validation_split.json",
+  "num_train": 200,
+  "num_val": 5000,
+  "num_test": 10000,
+  "epochs": 30,
+  "batch_size": 64,
+  "lr": 0.001,
+  "weight_decay": 0.0001,
+  "seed": 0,
+  "k": 20,
+  "subset_seed": 0,
+  "best_epoch": 7,
+  "best_val_acc": 0.2406,
+  "test_loss_best_checkpoint": 3.1325488243103026,
+  "test_acc_best_checkpoint": 0.2324,
+  "best_model_path": "results\\checkpoints\\cifar10_resnet18_k20_seed0_none_best.pt",
+  "metrics_path": "results\\metrics\\cifar10_resnet18_k20_seed0_none.csv"
+}
