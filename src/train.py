@@ -53,6 +53,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from models.resnet import build_resnet18_cifar10
+from augmentations.cutmix import CutMix
 
 
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
@@ -171,10 +172,8 @@ def get_transforms(augmentation: str) -> tuple[transforms.Compose, transforms.Co
     # These are intentionally not implemented yet.
     # They will be added through the MixUp, CutMix, and AugMix issues.
     if augmentation in {"mixup", "cutmix", "augmix"}:
-        raise NotImplementedError(
-            f"Augmentation '{augmentation}' is not implemented in v1 yet. "
-            "Use --augmentation none for now."
-        )
+        train_transform = eval_transform
+        return train_transform, eval_transform
 
     raise ValueError(f"Unsupported augmentation: {augmentation}")
 
@@ -271,8 +270,10 @@ def train_one_epoch(
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
     device: torch.device,
+    augmentation: str = "none",
+    cutmix=None,
 ) -> tuple[float, float]:
-    """Train for one epoch and return average loss and accuracy."""
+
     model.train()
 
     total_loss = 0.0
@@ -280,18 +281,44 @@ def train_one_epoch(
     total_examples = 0
 
     for images, targets in dataloader:
+
         images = images.to(device)
         targets = targets.to(device)
 
         optimizer.zero_grad(set_to_none=True)
-        logits = model(images)
-        loss = criterion(logits, targets)
+
+        # =====================================================
+        # CUTMIX
+        # =====================================================
+
+        if augmentation == "cutmix":
+
+            images, targets_a, targets_b, lam = cutmix(images, targets)
+
+            logits = model(images)
+
+            loss = (
+                lam * criterion(logits, targets_a)
+                + (1.0 - lam) * criterion(logits, targets_b)
+            )
+
+        else:
+
+            logits = model(images)
+
+            loss = criterion(logits, targets)
+
+        # =====================================================
+
         loss.backward()
         optimizer.step()
 
         batch_size = targets.size(0)
+
         total_loss += loss.item() * batch_size
+
         total_correct += (logits.argmax(dim=1) == targets).sum().item()
+
         total_examples += batch_size
 
     return total_loss / total_examples, total_correct / total_examples
@@ -407,12 +434,18 @@ def run_experiment(config: ExperimentConfig) -> None:
         lr=config.lr,
         weight_decay=config.weight_decay,
     )
+    
+    cutmix = None
+
+    if config.augmentation == "cutmix":
+        cutmix = CutMix(alpha=1.0)
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
     metrics: list[dict] = []
     best_val_acc = -math.inf
     best_epoch = -1
+    
 
     for epoch in range(1, config.epochs + 1):
         train_loss, train_acc = train_one_epoch(
@@ -421,6 +454,8 @@ def run_experiment(config: ExperimentConfig) -> None:
             criterion=criterion,
             optimizer=optimizer,
             device=device,
+            augmentation=config.augmentation,
+            cutmix=cutmix,
         )
 
         val_loss, val_acc = evaluate(
@@ -511,10 +546,11 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument("--k", type=int, default=20, choices=[5, 10, 20, 50, 100])
     parser.add_argument("--subset-seed", type=int, default=0)
     parser.add_argument(
-        "--augmentation",
-        type=str,
-        default="none",
-        choices=["none", "mixup", "cutmix", "augmix"],
+    '--augmentation',
+    type=str,
+    default='none',
+    choices=['none', 'mixup', 'cutmix'],
+    help='augmentation method'
     )
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=64)
