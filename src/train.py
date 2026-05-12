@@ -54,6 +54,7 @@ from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from models.resnet import build_resnet18_cifar10
 from augmentations.cutmix import CutMix
+from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 
 
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
@@ -71,6 +72,7 @@ class ExperimentConfig:
     k: int
     subset_seed: int
     augmentation: str
+    mixup_alpha: float
     epochs: int
     batch_size: int
     lr: float
@@ -263,7 +265,6 @@ def build_dataloaders(
 # Training and evaluation
 # -----------------------------------------------------------------------------
 
-
 def train_one_epoch(
     model: nn.Module,
     dataloader: DataLoader,
@@ -272,12 +273,13 @@ def train_one_epoch(
     device: torch.device,
     augmentation: str = "none",
     cutmix=None,
+    mixup_alpha: float = 1.0,
 ) -> tuple[float, float]:
 
     model.train()
 
     total_loss = 0.0
-    total_correct = 0
+    total_correct = 0.0
     total_examples = 0
 
     for images, targets in dataloader:
@@ -302,13 +304,52 @@ def train_one_epoch(
                 + (1.0 - lam) * criterion(logits, targets_b)
             )
 
+            predicted = logits.argmax(dim=1)
+            batch_correct = (
+                lam * predicted.eq(targets_a).float()
+                + (1.0 - lam) * predicted.eq(targets_b).float()
+            ).sum().item()
+
+        # =====================================================
+        # MIXUP
+        # =====================================================
+
+        elif augmentation == "mixup":
+
+            images, targets_a, targets_b, lam = apply_mixup(
+                images=images,
+                targets=targets,
+                alpha=mixup_alpha,
+            )
+
+            logits = model(images)
+
+            loss = mixup_criterion(
+                criterion=criterion,
+                predictions=logits,
+                targets_a=targets_a,
+                targets_b=targets_b,
+                lam=lam,
+            )
+
+            batch_correct = mixup_accuracy(
+                predictions=logits,
+                targets_a=targets_a,
+                targets_b=targets_b,
+                lam=lam,
+            )
+
+        # =====================================================
+        # NO AUGMENTATION
+        # =====================================================
+
         else:
 
             logits = model(images)
 
             loss = criterion(logits, targets)
 
-        # =====================================================
+            batch_correct = (logits.argmax(dim=1) == targets).sum().item()
 
         loss.backward()
         optimizer.step()
@@ -316,13 +357,10 @@ def train_one_epoch(
         batch_size = targets.size(0)
 
         total_loss += loss.item() * batch_size
-
-        total_correct += (logits.argmax(dim=1) == targets).sum().item()
-
+        total_correct += batch_correct
         total_examples += batch_size
 
     return total_loss / total_examples, total_correct / total_examples
-
 
 @torch.no_grad()
 def evaluate(
@@ -456,6 +494,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             device=device,
             augmentation=config.augmentation,
             cutmix=cutmix,
+            mixup_alpha=config.mixup_alpha,
         )
 
         val_loss, val_acc = evaluate(
@@ -560,6 +599,12 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
     parser.add_argument("--output-root", type=str, default="results")
+    parser.add_argument( # this is just for mixup
+        "--mixup-alpha",
+        type=float,
+        default=1.0,
+        help="MixUp alpha parameter. Default: 1.0.",
+    )
     parser.add_argument(
         "--num-workers",
         type=int,
@@ -575,6 +620,7 @@ def parse_args() -> ExperimentConfig:
         k=args.k,
         subset_seed=args.subset_seed,
         augmentation=args.augmentation,
+        mixup_alpha=args.mixup_alpha,
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
