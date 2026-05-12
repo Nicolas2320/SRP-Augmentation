@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # Load CSV
 df = pd.read_csv(
-    "results/metrics/cifar10_resnet18_k5_seed0_cutmix_epochs30.csv"
+    "results/metrics/cifar10_resnet18_kN_seed0_cutmix_epochs30.csv"
 )
 
 # =====================================================
@@ -28,7 +28,7 @@ plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
 
 plt.title(
-    "ResNet18 + CutMix on CIFAR-10 (k=5)"
+    "ResNet18 - CutMix on CIFAR-10 (k=N)"
 )
 
 plt.legend()
@@ -36,3 +36,5 @@ plt.legend()
 plt.grid(True)
 
 plt.show()
+
+# Save plot in `results/figures/`
