@@ -28,7 +28,7 @@ plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
 
 plt.title(
-    "ResNet18 - CutMix on CIFAR-10 (k=N)"
+    "ResNet50 - CutMix on CIFAR-100 (k=N)"
 )
 
 plt.legend()

@@ -3,13 +3,13 @@ Unified training script for SRP-Augmentation.
 
 Purpose
 -------
-This file is the official experiment entry point for CIFAR-10 baseline runs.
+This file is the official experiment entry point for CIFAR baseline runs.
 It replaces the old prototype direction of `train_baseline.py`.
 
 Current v1 support
 ------------------
-- Dataset: CIFAR-10
-- Models: ResNet18, ViT
+- Dataset: CIFAR
+- Models: ResNet50, ViT
 - Augmentation: none
 - k-shot split loading: k5, k10, k20, k50, k100
 - subset seed loading: seed0, seed1, seed2 if split files exist
@@ -27,8 +27,8 @@ Future support
 Example
 -------
 python src/train.py \
-  --dataset cifar10 \
-  --model resnet18 \
+  --dataset cifar100 \
+  --model resnet50 \
   --k 20 \
   --subset-seed 0 \
   --augmentation none \
@@ -51,8 +51,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
-from torchvision.datasets import CIFAR10
-from models.resnet import build_resnet18_cifar10
+from torchvision.datasets import CIFAR10, CIFAR100
+from models.resnet import build_resnet50_cifar
 from augmentations.cutmix import CutMix
 from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 
@@ -60,8 +60,11 @@ from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
 CIFAR10_STD = (0.2470, 0.2435, 0.2616)
 
-DatasetName = Literal["cifar10"]
-ModelName = Literal["resnet18", "vit"]
+CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
+CIFAR100_STD = (0.2675, 0.2565, 0.2761)
+
+DatasetName = Literal["cifar10", "cifar100"]
+ModelName = Literal["resnet50", "vit"]
 AugmentationName = Literal["none", "mixup", "cutmix", "augmix"]
 
 
@@ -116,16 +119,15 @@ def get_device() -> torch.device:
 
 # ResNet builder is implemented in `src/models/resnet.py` and imported above.
 
-def build_model(model_name: str, num_classes: int = 10) -> nn.Module:
+def build_model(model_name: str, num_classes: int = 100) -> nn.Module:
     """Build selected model."""
-    if model_name == "resnet18":
-        return build_resnet18_cifar10(num_classes=num_classes)
+    if model_name == "resnet50":
+        return build_resnet50_cifar(num_classes=num_classes)
 
     # if model_name == "vit":
-        # Waiting for VIT code
+    #     Waiting for ViT code
 
     raise ValueError(f"Unsupported model: {model_name}")
-
 
 # -----------------------------------------------------------------------------
 # Data and transforms
@@ -143,12 +145,33 @@ def load_json(path: Path) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+def get_num_classes(dataset: str) -> int:
+    if dataset == "cifar10":
+        return 10
+    if dataset == "cifar100":
+        return 100
+    raise ValueError(f"Unsupported dataset: {dataset}")
 
+
+def get_dataset_class(dataset: str):
+    if dataset == "cifar10":
+        return CIFAR10
+    if dataset == "cifar100":
+        return CIFAR100
+    raise ValueError(f"Unsupported dataset: {dataset}")
+
+
+def get_dataset_stats(dataset: str) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    if dataset == "cifar10":
+        return CIFAR10_MEAN, CIFAR10_STD
+    if dataset == "cifar100":
+        return CIFAR100_MEAN, CIFAR100_STD
+    raise ValueError(f"Unsupported dataset: {dataset}")
 
 def get_split_paths(dataset: str, k: int, subset_seed: int, split_root: str) -> tuple[Path, Path]:
     """Return train subset and validation split paths."""
-    if dataset != "cifar10":
-        raise ValueError("This v1 script supports only CIFAR-10.")
+    if dataset not in {"cifar10", "cifar100"}:
+        raise ValueError(f"Unsupported dataset: {dataset}")
 
     split_dir = Path(split_root) / dataset
     train_split_path = split_dir / f"k{k}_seed{subset_seed}.json"
@@ -157,13 +180,13 @@ def get_split_paths(dataset: str, k: int, subset_seed: int, split_root: str) -> 
     return train_split_path, val_split_path
 
 
-
-def get_transforms(augmentation: str) -> tuple[transforms.Compose, transforms.Compose]:
+def get_transforms(dataset: str, augmentation: str) -> tuple[transforms.Compose, transforms.Compose]:
     """Return train and evaluation transforms."""
+    mean, std = get_dataset_stats(dataset)
     eval_transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
+            transforms.Normalize(mean, std),
         ]
     )
 
@@ -199,26 +222,31 @@ def build_dataloaders(
     train_indices = train_split_info["train_indices"]
     val_indices = val_split_info["val_indices"]
 
-    train_transform, eval_transform = get_transforms(config.augmentation)
+    train_transform, eval_transform = get_transforms(
+    dataset=config.dataset,
+    augmentation=config.augmentation,
+    )
 
-    train_full = CIFAR10(
+    DatasetClass = get_dataset_class(config.dataset)
+
+    train_full = DatasetClass(
         root=config.data_root,
         train=True,
-        download=True,
+        download=True, # False on cluster
         transform=train_transform,
     )
 
-    val_full = CIFAR10(
+    val_full = DatasetClass(
         root=config.data_root,
         train=True,
-        download=True,
+        download=True, # False on cluster
         transform=eval_transform,
     )
 
-    test_dataset = CIFAR10(
+    test_dataset = DatasetClass(
         root=config.data_root,
         train=False,
-        download=True,
+        download=True, # False on cluster
         transform=eval_transform,
     )
 
@@ -390,11 +418,9 @@ def evaluate(
 
     return total_loss / total_examples, total_correct / total_examples
 
-
 # -----------------------------------------------------------------------------
 # Output helpers
 # -----------------------------------------------------------------------------
-
 
 def experiment_name(config: ExperimentConfig) -> str:
     """Create a consistent experiment name for files."""
@@ -403,8 +429,6 @@ def experiment_name(config: ExperimentConfig) -> str:
         f"k{config.k}_seed{config.subset_seed}_"
         f"{config.augmentation}_epochs{config.epochs}"
     )
-
-
 
 def save_metrics_csv(metrics: list[dict], output_path: Path) -> None:
     """Save epoch-level metrics."""
@@ -465,7 +489,8 @@ def run_experiment(config: ExperimentConfig) -> None:
         num_test,
     ) = build_dataloaders(config=config, device=device)
 
-    model = build_model(config.model, num_classes=10).to(device)
+    num_classes = get_num_classes(config.dataset)
+    model = build_model(config.model, num_classes=num_classes).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -578,10 +603,10 @@ def run_experiment(config: ExperimentConfig) -> None:
 
 
 def parse_args() -> ExperimentConfig:
-    parser = argparse.ArgumentParser(description="Unified CIFAR-10 SRP training script")
+    parser = argparse.ArgumentParser(description="Unified CIFAR SRP training script")
 
-    parser.add_argument("--dataset", type=str, default="cifar10", choices=["cifar10"])
-    parser.add_argument("--model", type=str, default="resnet18", choices=["resnet18", "vit"])
+    parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
+    parser.add_argument("--model", type=str, default="resnet50", choices=["resnet50", "vit"])
     parser.add_argument("--k", type=int, default=20, choices=[5, 10, 20, 50, 100])
     parser.add_argument("--subset-seed", type=int, default=0)
     parser.add_argument(
