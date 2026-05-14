@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # Load CSV
 df = pd.read_csv(
-    "results/metrics/cifar10_resnet18_kN_seed0_cutmix_epochs30.csv"
+    "results\metrics\cifar100_resnet50_k50_seed0_none_epochs100.csv"
 )
 
 # =====================================================
@@ -28,7 +28,7 @@ plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
 
 plt.title(
-    "ResNet50 - CutMix on CIFAR-100 (k=N)"
+    "ResNet50 - No Augmentation on CIFAR-100 (k=50)"
 )
 
 plt.legend()
