@@ -1,19 +1,25 @@
 import torch.nn as nn
-from torchvision.models import resnet18
+from torchvision.models import resnet50
 
 
-def build_resnet18_cifar10(num_classes: int = 10) -> nn.Module:
+def build_resnet50_cifar(num_classes: int = 100) -> nn.Module:
     """
-    Build ResNet18 adapted for CIFAR-10.
+    Build ResNet50 adapted for CIFAR-style datasets.
 
-    Standard ResNet18 was designed for larger ImageNet images.
-    CIFAR-10 images are 32x32, so we use:
-    - 3x3 first convolution
-    - stride 1
-    - no initial maxpool
-    - output layer with 10 classes
+    Standard ResNet50 was designed for ImageNet images of size 224x224.
+    CIFAR images are 32x32, so we adapt the first layers:
+
+    - use a 3x3 first convolution instead of 7x7
+    - use stride 1 instead of stride 2
+    - remove the initial maxpool
+    - set the final classifier to num_classes
+
+    This works for:
+    - CIFAR-10 with num_classes=10
+    - CIFAR-100 with num_classes=100
     """
-    model = resnet18(weights=None, num_classes=num_classes)
+
+    model = resnet50(weights=None, num_classes=num_classes)
 
     model.conv1 = nn.Conv2d(
         in_channels=3,
