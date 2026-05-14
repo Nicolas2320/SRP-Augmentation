@@ -42,10 +42,8 @@ Which image augmentation strategies improve classification performance most reli
 
 - AugMix implementation
 - Vision Transformer baseline
-- Similarity-Guided Mixing
-- Multi-seed evaluation
-- Failure case analysis
 - Final comparison tables and plots
+- First Presentation Slides
 
 ---
 
