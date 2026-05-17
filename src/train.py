@@ -53,6 +53,7 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100
 from models.resnet import build_resnet50_cifar
+from models.vit import build_vit_cifar
 from augmentations.cutmix import CutMix
 from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 
@@ -124,8 +125,8 @@ def build_model(model_name: str, num_classes: int = 100) -> nn.Module:
     if model_name == "resnet50":
         return build_resnet50_cifar(num_classes=num_classes)
 
-    # if model_name == "vit":
-    #     Waiting for ViT code
+    if model_name == "vit":
+        return build_vit_cifar(num_classes=num_classes)
 
     raise ValueError(f"Unsupported model: {model_name}")
 
