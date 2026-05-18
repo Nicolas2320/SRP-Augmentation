@@ -4,6 +4,8 @@ data/raw/
 *.pt
 *.pth
 *.png
+# macOS
+.DS_Store
 __pycache__/
 *.pyc
 *.pyo
