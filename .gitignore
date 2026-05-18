@@ -4,3 +4,7 @@ data/raw/
 *.pt
 *.pth
 *.png
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
