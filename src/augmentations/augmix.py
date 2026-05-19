@@ -265,6 +265,51 @@ def augment_and_mix(image, severity=3, width=3, depth=-1, alpha=1.0):
     return mixed
 
 
+class AugMixTransform:
+    """
+    Torchvision-compatible AugMix transform.
+
+    Input:
+        PIL image from CIFAR dataset.
+
+    Output:
+        Normalized torch.Tensor with shape [C, H, W].
+    """
+
+    def __init__(
+        self,
+        mean,
+        std,
+        severity: int = 3,
+        width: int = 3,
+        depth: int = -1,
+        alpha: float = 1.0,
+    ):
+        self.mean = mean
+        self.std = std
+        self.severity = severity
+        self.width = width
+        self.depth = depth
+        self.alpha = alpha
+
+    def __call__(self, pil_img):
+        import torch
+
+        image = np.asarray(pil_img).astype(np.float32) / 255.0
+
+        mixed = augment_and_mix(
+            image,
+            severity=self.severity,
+            width=self.width,
+            depth=self.depth,
+            alpha=self.alpha,
+        )
+
+        tensor = torch.from_numpy(mixed).permute(2, 0, 1).float()
+        return tensor
+
+
+
 # ============================================================
 # 3. Self-test
 # ============================================================
