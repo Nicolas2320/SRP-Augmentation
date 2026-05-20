@@ -18,7 +18,7 @@ Current v1 support
 - final test evaluation using the best validation checkpoint
 - metrics CSV and summary JSON outputs
 
-Future support
+Current support
 --------------
 - MixUp
 - CutMix
@@ -55,6 +55,7 @@ from torchvision.datasets import CIFAR10, CIFAR100
 from models.resnet import build_resnet50_cifar
 from models.vit import build_vit_cifar
 from augmentations.cutmix import CutMix
+from augmentations.augmix import AugMixTransform
 from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 
 
@@ -184,6 +185,7 @@ def get_split_paths(dataset: str, k: int, subset_seed: int, split_root: str) -> 
 def get_transforms(dataset: str, augmentation: str) -> tuple[transforms.Compose, transforms.Compose]:
     """Return train and evaluation transforms."""
     mean, std = get_dataset_stats(dataset)
+
     eval_transform = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -195,9 +197,18 @@ def get_transforms(dataset: str, augmentation: str) -> tuple[transforms.Compose,
         train_transform = eval_transform
         return train_transform, eval_transform
 
-    # These are intentionally not implemented yet.
-    # They will be added through the MixUp, CutMix, and AugMix issues.
-    if augmentation in {"mixup", "cutmix", "augmix"}:
+    if augmentation == "augmix":
+        train_transform = AugMixTransform(
+            mean=mean,
+            std=std,
+            severity=3,
+            width=3,
+            depth=-1,
+            alpha=1.0,
+        )
+        return train_transform, eval_transform
+
+    if augmentation in {"mixup", "cutmix"}:
         train_transform = eval_transform
         return train_transform, eval_transform
 
@@ -614,7 +625,7 @@ def parse_args() -> ExperimentConfig:
     '--augmentation',
     type=str,
     default='none',
-    choices=['none', 'mixup', 'cutmix'],
+    choices=["none", "mixup", "cutmix", "augmix"],
     help='augmentation method'
     )
     parser.add_argument("--epochs", type=int, default=30)
