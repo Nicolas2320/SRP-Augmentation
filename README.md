@@ -37,13 +37,12 @@ Which image augmentation strategies improve classification performance most reli
 - Experiment summaries saved as JSON files
 - Best validation checkpoint saving
 - Final test evaluation using the best validation checkpoint
-
-### In Progress (Before First-Presentation)
-
 - AugMix implementation
 - Vision Transformer baseline
 - Final comparison tables and plots
-- First Presentation Slides
+
+### In Progress (Before First-Presentation)
+- First Presentation Slides(90% complete)
 
 ---
 
