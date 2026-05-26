@@ -28,6 +28,7 @@ for file_path in csv_files:
     plt.plot(df['epoch'], df['val_acc'], label='Validation Accuracy', color='orange', linewidth=2)
     
     plt.title(f'Accuracy: {base_name}')
+    plt.ylim(0, 1.0)
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()

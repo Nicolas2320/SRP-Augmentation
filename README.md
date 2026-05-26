@@ -29,10 +29,12 @@ Which image augmentation strategies improve classification performance most reli
 - Reproducible CIFAR-10 and CIFAR-100 k-shot split generation
 - Fixed validation split
 - ResNet50 adapted for CIFAR-size images
+- ViT adapted for CIFAR-size images
 - Unified training entry point in `src/train.py`
 - No-augmentation baseline
 - MixUp augmentation
 - CutMix augmentation
+- AugMix augmentation
 - Metrics saved as CSV files
 - Experiment summaries saved as JSON files
 - Best validation checkpoint saving
@@ -40,8 +42,6 @@ Which image augmentation strategies improve classification performance most reli
 
 ### In Progress (Before First-Presentation)
 
-- AugMix implementation
-- Vision Transformer baseline
 - Final comparison tables and plots
 - First Presentation Slides
 
@@ -70,6 +70,9 @@ SRP-Augmentation/
 │   │
 │   ├── data/
 │   │   └── make_splits.py
+│   │
+│   ├── graphs/
+│   │   └── plot_graphs.py       # Plot Accuracy and Loss functions
 │   │
 │   ├── models/
 │   │   ├── resnet.py
