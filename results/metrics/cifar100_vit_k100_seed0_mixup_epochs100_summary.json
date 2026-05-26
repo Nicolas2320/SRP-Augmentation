@@ -3,7 +3,7 @@
   "model": "vit",
   "k": 100,
   "subset_seed": 0,
-  "augmentation": "augmix",
+  "augmentation": "mixup",
   "mixup_alpha": 1.0,
   "epochs": 100,
   "batch_size": 64,
@@ -17,10 +17,10 @@
   "num_train": 10000,
   "num_val": 5000,
   "num_test": 10000,
-  "best_epoch": 95,
-  "best_val_acc": 0.2274,
-  "test_loss_best_checkpoint": 4.719891120147705,
-  "test_acc_best_checkpoint": 0.2321,
-  "metrics_path": "results\\metrics\\cifar100_vit_k100_seed0_augmix_epochs100.csv",
-  "best_model_path": "results\\checkpoints\\cifar100_vit_k100_seed0_augmix_epochs100_best.pt"
+  "best_epoch": 100,
+  "best_val_acc": 0.2578,
+  "test_loss_best_checkpoint": 3.326894397735596,
+  "test_acc_best_checkpoint": 0.2617,
+  "metrics_path": "results\\metrics\\cifar100_vit_k100_seed0_mixup_epochs100.csv",
+  "best_model_path": "results\\checkpoints\\cifar100_vit_k100_seed0_mixup_epochs100_best.pt"
 }
