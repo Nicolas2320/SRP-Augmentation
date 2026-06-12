@@ -3,23 +3,24 @@ import numpy as np
 
 
 class CutMix:
-    def __init__(self, alpha=1.0, probability=1.0):
+    def __init__(self, alpha=1.0, probability=1.0, seed=None, rng=None):
         self.alpha = alpha
         self.probability = probability
+        self.rng = rng or np.random.default_rng(seed)
 
     def rand_bbox(self, size, lam):
         """
         size = (B, C, H, W)
         """
-        W = size[2]
-        H = size[3]
+        H = size[2]
+        W = size[3]
 
         cut_rat = np.sqrt(1.0 - lam)
         cut_w = int(W * cut_rat)
         cut_h = int(H * cut_rat)
 
-        cx = np.random.randint(W)
-        cy = np.random.randint(H)
+        cx = self.rng.integers(W)
+        cy = self.rng.integers(H)
 
         bbx1 = np.clip(cx - cut_w // 2, 0, W)
         bby1 = np.clip(cy - cut_h // 2, 0, H)
@@ -30,7 +31,7 @@ class CutMix:
 
     def __call__(self, images, labels):
 
-        if np.random.rand() > self.probability:
+        if self.rng.random() > self.probability:
             return images, labels, labels, 1.0
 
         batch_size = images.size(0)
@@ -40,7 +41,7 @@ class CutMix:
         labels_a = labels
         labels_b = labels[rand_index]
 
-        lam = np.random.beta(self.alpha, self.alpha)
+        lam = self.rng.beta(self.alpha, self.alpha)
 
         bbx1, bby1, bbx2, bby2 = self.rand_bbox(images.size(), lam)
 
