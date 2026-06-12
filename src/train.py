@@ -8,21 +8,15 @@ It replaces the old prototype direction of `train_baseline.py`.
 
 Current v1 support
 ------------------
-- Dataset: CIFAR
+- Dataset: CIFAR-10, CIFAR-100
 - Models: ResNet50, ViT
-- Augmentation: none
+- Augmentation: none, MixUp, CutMix, AugMix
 - k-shot split loading: k5, k10, k20, k50, k100
 - subset seed loading: seed0, seed1, seed2 if split files exist
 - fixed validation split
 - best validation checkpoint saving
 - final test evaluation using the best validation checkpoint
 - metrics CSV and summary JSON outputs
-
-Current support
---------------
-- MixUp
-- CutMix
-- AugMix
 
 Example
 -------
@@ -49,7 +43,7 @@ from typing import Literal
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, get_worker_info
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100
 from models.resnet import build_resnet50_cifar
@@ -95,11 +89,31 @@ class ExperimentConfig:
 
 
 def set_seed(seed: int) -> None:
-    """Set random seeds for Python, NumPy, and PyTorch."""
+    """Set random seeds and deterministic CUDA/cuDNN behavior where possible."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True, warn_only=True)
+
+
+def seed_worker(worker_id: int) -> None:
+    """Seed DataLoader worker RNGs and any transform-local RNG."""
+    worker_seed = torch.initial_seed() % 2**32
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+
+    worker_info = get_worker_info()
+    if worker_info is None:
+        return
+
+    dataset = worker_info.dataset
+    base_dataset = dataset.dataset if isinstance(dataset, Subset) else dataset
+    transform = getattr(base_dataset, "transform", None)
+    if hasattr(transform, "set_seed"):
+        transform.set_seed(worker_seed)
 
 
 
@@ -182,7 +196,11 @@ def get_split_paths(dataset: str, k: int, subset_seed: int, split_root: str) -> 
     return train_split_path, val_split_path
 
 
-def get_transforms(dataset: str, augmentation: str) -> tuple[transforms.Compose, transforms.Compose]:
+def get_transforms(
+    dataset: str,
+    augmentation: str,
+    seed: int,
+) -> tuple[transforms.Compose, transforms.Compose]:
     """Return train and evaluation transforms."""
     mean, std = get_dataset_stats(dataset)
 
@@ -205,6 +223,7 @@ def get_transforms(dataset: str, augmentation: str) -> tuple[transforms.Compose,
             width=3,
             depth=-1,
             alpha=1.0,
+            seed=seed,
         )
         return train_transform, eval_transform
 
@@ -235,8 +254,9 @@ def build_dataloaders(
     val_indices = val_split_info["val_indices"]
 
     train_transform, eval_transform = get_transforms(
-    dataset=config.dataset,
-    augmentation=config.augmentation,
+        dataset=config.dataset,
+        augmentation=config.augmentation,
+        seed=config.train_seed,
     )
 
     DatasetClass = get_dataset_class(config.dataset)
@@ -266,6 +286,12 @@ def build_dataloaders(
     val_dataset = Subset(val_full, val_indices)
 
     pin_memory = device.type == "cuda"
+    train_generator = torch.Generator()
+    train_generator.manual_seed(config.train_seed)
+    val_generator = torch.Generator()
+    val_generator.manual_seed(config.train_seed + 1)
+    test_generator = torch.Generator()
+    test_generator.manual_seed(config.train_seed + 2)
 
     train_loader = DataLoader(
         train_dataset,
@@ -273,6 +299,8 @@ def build_dataloaders(
         shuffle=True,
         num_workers=config.num_workers,
         pin_memory=pin_memory,
+        worker_init_fn=seed_worker,
+        generator=train_generator,
     )
 
     val_loader = DataLoader(
@@ -281,6 +309,8 @@ def build_dataloaders(
         shuffle=False,
         num_workers=config.num_workers,
         pin_memory=pin_memory,
+        worker_init_fn=seed_worker,
+        generator=val_generator,
     )
 
     test_loader = DataLoader(
@@ -289,6 +319,8 @@ def build_dataloaders(
         shuffle=False,
         num_workers=config.num_workers,
         pin_memory=pin_memory,
+        worker_init_fn=seed_worker,
+        generator=test_generator,
     )
 
     return (
@@ -314,6 +346,7 @@ def train_one_epoch(
     augmentation: str = "none",
     cutmix=None,
     mixup_alpha: float = 1.0,
+    augmentation_rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
 
     model.train()
@@ -360,6 +393,7 @@ def train_one_epoch(
                 images=images,
                 targets=targets,
                 alpha=mixup_alpha,
+                rng=augmentation_rng,
             )
 
             logits = model(images)
@@ -509,11 +543,12 @@ def run_experiment(config: ExperimentConfig) -> None:
         lr=config.lr,
         weight_decay=config.weight_decay,
     )
+    augmentation_rng = np.random.default_rng(config.train_seed)
     
     cutmix = None
 
     if config.augmentation == "cutmix":
-        cutmix = CutMix(alpha=1.0)
+        cutmix = CutMix(alpha=1.0, seed=config.train_seed)
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -532,6 +567,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             augmentation=config.augmentation,
             cutmix=cutmix,
             mixup_alpha=config.mixup_alpha,
+            augmentation_rng=augmentation_rng,
         )
 
         val_loss, val_acc = evaluate(

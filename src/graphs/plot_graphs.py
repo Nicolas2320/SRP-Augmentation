@@ -1,56 +1,362 @@
-import pandas as pd
+"""Generate comparison plots for SRP augmentation experiments.
+
+The script reads:
+- summary JSON files for final/best-checkpoint metrics
+- CSV files for epoch-level training curves
+
+It produces five high-value figures in results/figures:
+1. test_accuracy_by_augmentation.png
+2. test_accuracy_vs_k.png
+3. val_accuracy_curves_by_augmentation.png
+4. baseline_improvement.png
+5. test_accuracy_heatmap.png
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from pathlib import Path
+
 import matplotlib.pyplot as plt
-import os
-import glob
+import pandas as pd
 
-# 1. Set up the folders
-metrics_folder = 'results/metrics'
-figures_folder = 'results/figures'
 
-# Make sure the figures folder exists so we don't get an error
-os.makedirs(figures_folder, exist_ok=True)
+METRICS_DIR = Path("results/metrics")
+FIGURES_DIR = Path("results/figures")
 
-# 2. Find all the CSV files
-csv_files = glob.glob(os.path.join(metrics_folder, '*.csv'))
-print(f"Found {len(csv_files)} CSV files. Drawing graphs now...")
+AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix"]
+MODEL_ORDER = ["resnet50", "vit"]
+COLORS = {
+    "none": "#4C566A",
+    "mixup": "#5E81AC",
+    "cutmix": "#A3BE8C",
+    "augmix": "#D08770",
+}
 
-# 3. Loop through every single file automatically
-for file_path in csv_files:
-    # Get just the file name to use as a title
-    base_name = os.path.basename(file_path).replace('.csv', '')
-    
-    # Read the numbers from the CSV
-    df = pd.read_csv(file_path)
-    
-    # --- GRAPH A: ACCURACY ---
-    plt.figure(figsize=(10, 5))
-    plt.plot(df['epoch'], df['train_acc'], label='Train Accuracy', color='blue', linewidth=2)
-    plt.plot(df['epoch'], df['val_acc'], label='Validation Accuracy', color='orange', linewidth=2)
-    
-    plt.title(f'Accuracy: {base_name}')
-    plt.ylim(0, 1.0)
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.legend()
-    plt.grid(True)
-    
-    # Save it to the figures folder
-    plt.savefig(os.path.join(figures_folder, f"{base_name}_accuracy.png"))
-    plt.close() # Close the graph so your Mac's memory doesn't get full
-    
-    # --- GRAPH B: LOSS ---
-    plt.figure(figsize=(10, 5))
-    plt.plot(df['epoch'], df['train_loss'], label='Train Loss', color='blue', linewidth=2)
-    plt.plot(df['epoch'], df['val_loss'], label='Validation Loss', color='orange', linewidth=2)
-    
-    plt.title(f'Loss: {base_name}')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True)
-    
-    # Save it to the figures folder
-    plt.savefig(os.path.join(figures_folder, f"{base_name}_loss.png"))
+
+def save_current_figure(path: Path, tight_layout: bool = True) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if tight_layout:
+        plt.tight_layout()
+    plt.savefig(path, dpi=180, bbox_inches="tight")
     plt.close()
 
-print("Success! All graphs have been saved to the results/figures folder.")
+
+def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
+    rows = []
+
+    for path in sorted(metrics_dir.glob("*_summary.json")):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        rows.append(
+            {
+                "dataset": data["dataset"],
+                "model": data["model"],
+                "k": int(data["k"]),
+                "subset_seed": int(data["subset_seed"]),
+                "augmentation": data["augmentation"],
+                "best_epoch": int(data["best_epoch"]),
+                "best_val_acc": float(data["best_val_acc"]),
+                "test_acc": float(data["test_acc_best_checkpoint"]),
+                "test_loss": float(data["test_loss_best_checkpoint"]),
+                "metrics_path": data["metrics_path"],
+            }
+        )
+
+    if not rows:
+        raise FileNotFoundError(f"No summary JSON files found in {metrics_dir}")
+
+    df = pd.DataFrame(rows)
+    df["augmentation"] = pd.Categorical(
+        df["augmentation"],
+        categories=AUGMENTATION_ORDER,
+        ordered=True,
+    )
+    df["model"] = pd.Categorical(df["model"], categories=MODEL_ORDER, ordered=True)
+    return df.sort_values(["dataset", "model", "k", "augmentation", "subset_seed"])
+
+
+def aggregate_summary(df: pd.DataFrame) -> pd.DataFrame:
+    grouped = (
+        df.groupby(
+            ["dataset", "model", "k", "augmentation"],
+            observed=True,
+            as_index=False,
+        )
+        .agg(
+            mean_test_acc=("test_acc", "mean"),
+            std_test_acc=("test_acc", "std"),
+            mean_val_acc=("best_val_acc", "mean"),
+            mean_best_epoch=("best_epoch", "mean"),
+            runs=("test_acc", "count"),
+        )
+        .sort_values(["dataset", "model", "k", "augmentation"])
+    )
+    grouped["std_test_acc"] = grouped["std_test_acc"].fillna(0.0)
+    return grouped
+
+
+def resolve_metrics_path(path_text: str, metrics_dir: Path) -> Path:
+    path = Path(path_text)
+    if path.exists():
+        return path
+
+    fallback = metrics_dir / Path(path_text.replace("\\", "/")).name
+    return fallback
+
+
+def load_epoch_metrics(summary_df: pd.DataFrame, metrics_dir: Path) -> pd.DataFrame:
+    frames = []
+
+    for row in summary_df.itertuples(index=False):
+        metrics_path = resolve_metrics_path(row.metrics_path, metrics_dir)
+        if not metrics_path.exists():
+            print(f"Skipping missing metric CSV: {metrics_path}")
+            continue
+
+        metrics = pd.read_csv(metrics_path)
+        metrics["dataset"] = row.dataset
+        metrics["model"] = row.model
+        metrics["k"] = row.k
+        metrics["subset_seed"] = row.subset_seed
+        metrics["augmentation"] = row.augmentation
+        metrics["source_csv"] = str(metrics_path)
+        frames.append(metrics)
+
+    if not frames:
+        raise FileNotFoundError(f"No metric CSV files found from summaries in {metrics_dir}")
+
+    return pd.concat(frames, ignore_index=True)
+
+
+def plot_test_accuracy_by_augmentation(summary: pd.DataFrame) -> None:
+    combos = summary[["dataset", "model", "k"]].drop_duplicates()
+    n_plots = len(combos)
+    n_cols = min(3, n_plots)
+    n_rows = math.ceil(n_plots / n_cols)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows), squeeze=False)
+    axes_flat = axes.flatten()
+
+    for ax, combo in zip(axes_flat, combos.itertuples(index=False)):
+        subset = summary[
+            (summary["dataset"] == combo.dataset)
+            & (summary["model"] == combo.model)
+            & (summary["k"] == combo.k)
+        ].sort_values("augmentation")
+
+        labels = subset["augmentation"].astype(str).tolist()
+        values = subset["mean_test_acc"].tolist()
+        errors = subset["std_test_acc"].tolist()
+        colors = [COLORS.get(label, "#888888") for label in labels]
+
+        ax.bar(labels, values, yerr=errors, color=colors, edgecolor="#2E3440", linewidth=0.8)
+        ax.set_title(f"{combo.dataset} | {combo.model} | k={combo.k}")
+        ax.set_ylabel("Test accuracy")
+        ax.set_ylim(0, max(values + [0.05]) * 1.2)
+        ax.grid(axis="y", alpha=0.25)
+
+        for i, value in enumerate(values):
+            ax.text(i, value + 0.005, f"{value:.3f}", ha="center", va="bottom", fontsize=8)
+
+    for ax in axes_flat[n_plots:]:
+        ax.axis("off")
+
+    fig.suptitle("Test Accuracy by Augmentation", fontsize=16, y=1.02)
+    save_current_figure(FIGURES_DIR / "test_accuracy_by_augmentation.png")
+
+
+def plot_test_accuracy_vs_k(summary: pd.DataFrame) -> None:
+    models = [m for m in MODEL_ORDER if m in set(summary["model"].astype(str))]
+    n_cols = len(models)
+
+    fig, axes = plt.subplots(1, n_cols, figsize=(6 * n_cols, 4.5), squeeze=False)
+
+    for ax, model in zip(axes.flatten(), models):
+        model_df = summary[summary["model"].astype(str) == model]
+
+        for augmentation in AUGMENTATION_ORDER:
+            subset = model_df[model_df["augmentation"].astype(str) == augmentation].sort_values("k")
+            if subset.empty:
+                continue
+
+            ax.plot(
+                subset["k"],
+                subset["mean_test_acc"],
+                marker="o",
+                linewidth=2,
+                label=augmentation,
+                color=COLORS.get(augmentation),
+            )
+
+        ax.set_title(model)
+        ax.set_xlabel("Training examples per class (k)")
+        ax.set_ylabel("Test accuracy")
+        ax.grid(alpha=0.25)
+        ax.legend(title="Augmentation")
+
+    fig.suptitle("Test Accuracy vs k-shot Size", fontsize=16, y=1.02)
+    save_current_figure(FIGURES_DIR / "test_accuracy_vs_k.png")
+
+
+def plot_val_accuracy_curves(epoch_metrics: pd.DataFrame) -> None:
+    curve_df = (
+        epoch_metrics.groupby(
+            ["dataset", "model", "k", "augmentation", "epoch"],
+            observed=True,
+            as_index=False,
+        )
+        .agg(mean_val_acc=("val_acc", "mean"))
+        .sort_values(["dataset", "model", "k", "augmentation", "epoch"])
+    )
+
+    combos = curve_df[["dataset", "model", "k"]].drop_duplicates()
+    n_plots = len(combos)
+    n_cols = min(3, n_plots)
+    n_rows = math.ceil(n_plots / n_cols)
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows), squeeze=False)
+    axes_flat = axes.flatten()
+
+    for ax, combo in zip(axes_flat, combos.itertuples(index=False)):
+        subset = curve_df[
+            (curve_df["dataset"] == combo.dataset)
+            & (curve_df["model"] == combo.model)
+            & (curve_df["k"] == combo.k)
+        ]
+
+        for augmentation in AUGMENTATION_ORDER:
+            aug_df = subset[subset["augmentation"].astype(str) == augmentation]
+            if aug_df.empty:
+                continue
+
+            ax.plot(
+                aug_df["epoch"],
+                aug_df["mean_val_acc"],
+                linewidth=2,
+                label=augmentation,
+                color=COLORS.get(augmentation),
+            )
+
+        ax.set_title(f"{combo.dataset} | {combo.model} | k={combo.k}")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Validation accuracy")
+        ax.grid(alpha=0.25)
+        ax.legend(fontsize=8)
+
+    for ax in axes_flat[n_plots:]:
+        ax.axis("off")
+
+    fig.suptitle("Validation Accuracy Curves by Augmentation", fontsize=16, y=1.02)
+    save_current_figure(FIGURES_DIR / "val_accuracy_curves_by_augmentation.png")
+
+
+def plot_baseline_improvement(summary: pd.DataFrame) -> None:
+    baseline = summary[summary["augmentation"].astype(str) == "none"][
+        ["dataset", "model", "k", "mean_test_acc"]
+    ].rename(columns={"mean_test_acc": "baseline_test_acc"})
+
+    improved = summary[summary["augmentation"].astype(str) != "none"].merge(
+        baseline,
+        on=["dataset", "model", "k"],
+        how="inner",
+    )
+    improved["improvement"] = improved["mean_test_acc"] - improved["baseline_test_acc"]
+    improved["experiment"] = (
+        improved["model"].astype(str) + "\n" + improved["dataset"].astype(str) + " k=" + improved["k"].astype(str)
+    )
+
+    experiments = improved["experiment"].drop_duplicates().tolist()
+    augmentations = [aug for aug in AUGMENTATION_ORDER if aug != "none"]
+    x = range(len(experiments))
+    width = 0.24
+
+    fig, ax = plt.subplots(figsize=(max(9, len(experiments) * 1.3), 5))
+
+    for offset, augmentation in enumerate(augmentations):
+        subset = improved[improved["augmentation"].astype(str) == augmentation]
+        values = [
+            subset.loc[subset["experiment"] == experiment, "improvement"].iloc[0]
+            if experiment in set(subset["experiment"])
+            else 0.0
+            for experiment in experiments
+        ]
+        positions = [i + (offset - 1) * width for i in x]
+        ax.bar(
+            positions,
+            values,
+            width=width,
+            label=augmentation,
+            color=COLORS.get(augmentation),
+            edgecolor="#2E3440",
+            linewidth=0.7,
+        )
+
+    ax.axhline(0, color="#2E3440", linewidth=1)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(experiments)
+    ax.set_ylabel("Test accuracy improvement over no augmentation")
+    ax.set_title("Augmentation Improvement over Baseline")
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend(title="Augmentation")
+
+    save_current_figure(FIGURES_DIR / "baseline_improvement.png")
+
+
+def plot_test_accuracy_heatmap(summary: pd.DataFrame) -> None:
+    models = [m for m in MODEL_ORDER if m in set(summary["model"].astype(str))]
+    n_cols = len(models)
+
+    fig, axes = plt.subplots(1, n_cols, figsize=(5.5 * n_cols, 4.5), squeeze=False)
+    max_acc = summary["mean_test_acc"].max()
+
+    for ax, model in zip(axes.flatten(), models):
+        model_df = summary[summary["model"].astype(str) == model]
+        heatmap_data = model_df.pivot_table(
+            index="augmentation",
+            columns="k",
+            values="mean_test_acc",
+            observed=True,
+        ).reindex(AUGMENTATION_ORDER)
+
+        image = ax.imshow(heatmap_data, cmap="YlGnBu", vmin=0, vmax=max_acc)
+        ax.set_title(model)
+        ax.set_xlabel("k")
+        ax.set_ylabel("Augmentation")
+        ax.set_xticks(range(len(heatmap_data.columns)))
+        ax.set_xticklabels(heatmap_data.columns)
+        ax.set_yticks(range(len(heatmap_data.index)))
+        ax.set_yticklabels(heatmap_data.index.astype(str))
+
+        for y in range(heatmap_data.shape[0]):
+            for x in range(heatmap_data.shape[1]):
+                value = heatmap_data.iloc[y, x]
+                if pd.notna(value):
+                    ax.text(x, y, f"{value:.3f}", ha="center", va="center", fontsize=9)
+
+    fig.colorbar(image, ax=axes.ravel().tolist(), label="Test accuracy", shrink=0.85)
+    fig.suptitle("Test Accuracy Heatmap", fontsize=16, y=1.02)
+    save_current_figure(FIGURES_DIR / "test_accuracy_heatmap.png", tight_layout=False)
+
+
+def main() -> None:
+    summary_df = load_summary_metrics(METRICS_DIR)
+    summary = aggregate_summary(summary_df)
+    epoch_metrics = load_epoch_metrics(summary_df, METRICS_DIR)
+
+    print(f"Loaded {len(summary_df)} experiment summaries.")
+    print(f"Loaded epoch metrics for {epoch_metrics['source_csv'].nunique()} runs.")
+
+    plot_test_accuracy_by_augmentation(summary)
+    plot_test_accuracy_vs_k(summary)
+    plot_val_accuracy_curves(epoch_metrics)
+    plot_baseline_improvement(summary)
+    plot_test_accuracy_heatmap(summary)
+
+    print(f"Saved 5 comparison figures to {FIGURES_DIR}.")
+
+
+if __name__ == "__main__":
+    main()

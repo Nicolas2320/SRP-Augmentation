@@ -19,6 +19,7 @@ def apply_mixup(
     images: torch.Tensor,
     targets: torch.Tensor,
     alpha: float = 1.0,
+    rng: np.random.Generator | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
     """
     Apply MixUp to one batch.
@@ -31,6 +32,8 @@ def apply_mixup(
         Class labels with shape [B].
     alpha:
         Beta distribution parameter. Default is 1.0.
+    rng:
+        Seeded NumPy generator used for sampling lambda.
 
     Returns
     -------
@@ -51,7 +54,8 @@ def apply_mixup(
     if batch_size < 2:
         return images, targets, targets, 1.0
 
-    lam = float(np.random.beta(alpha, alpha))
+    rng = rng or np.random.default_rng()
+    lam = float(rng.beta(alpha, alpha))
 
     permutation = torch.randperm(batch_size, device=images.device)
 

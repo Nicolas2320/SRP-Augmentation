@@ -15,7 +15,7 @@ It also includes a small self-test that runs AugMix on a random CIFAR-sized imag
 import numpy as np
 from PIL import Image, ImageOps, ImageEnhance
 
-# CIFAR-10 image size. For ImageNet, change this value accordingly.
+# CIFAR image size. For ImageNet, change this value accordingly.
 IMAGE_SIZE = 32
 
 
@@ -45,45 +45,45 @@ def float_parameter(level, maxval):
     return float(level) * maxval / 10.0
 
 
-def sample_level(n):
+def sample_level(n, rng):
     """Sample an augmentation level uniformly from [0.1, n)."""
-    return np.random.uniform(low=0.1, high=n)
+    return rng.uniform(low=0.1, high=n)
 
 
-def autocontrast(pil_img, _):
+def autocontrast(pil_img, _, rng):
     """Apply autocontrast."""
     return ImageOps.autocontrast(pil_img)
 
 
-def equalize(pil_img, _):
+def equalize(pil_img, _, rng):
     """Apply histogram equalization."""
     return ImageOps.equalize(pil_img)
 
 
-def posterize(pil_img, level):
+def posterize(pil_img, level, rng):
     """Reduce the number of bits for each color channel."""
-    level = int_parameter(sample_level(level), 4)
+    level = int_parameter(sample_level(level, rng), 4)
     return ImageOps.posterize(pil_img, 4 - level)
 
 
-def rotate(pil_img, level):
+def rotate(pil_img, level, rng):
     """Rotate the image by a random degree up to 30 degrees."""
-    degrees = int_parameter(sample_level(level), 30)
-    if np.random.uniform() > 0.5:
+    degrees = int_parameter(sample_level(level, rng), 30)
+    if rng.uniform() > 0.5:
         degrees = -degrees
     return pil_img.rotate(degrees, resample=Image.BILINEAR)
 
 
-def solarize(pil_img, level):
+def solarize(pil_img, level, rng):
     """Invert all pixel values above a threshold."""
-    level = int_parameter(sample_level(level), 256)
+    level = int_parameter(sample_level(level, rng), 256)
     return ImageOps.solarize(pil_img, 256 - level)
 
 
-def shear_x(pil_img, level):
+def shear_x(pil_img, level, rng):
     """Shear the image along the x-axis."""
-    level = float_parameter(sample_level(level), 0.3)
-    if np.random.uniform() > 0.5:
+    level = float_parameter(sample_level(level, rng), 0.3)
+    if rng.uniform() > 0.5:
         level = -level
     return pil_img.transform(
         (IMAGE_SIZE, IMAGE_SIZE),
@@ -93,10 +93,10 @@ def shear_x(pil_img, level):
     )
 
 
-def shear_y(pil_img, level):
+def shear_y(pil_img, level, rng):
     """Shear the image along the y-axis."""
-    level = float_parameter(sample_level(level), 0.3)
-    if np.random.uniform() > 0.5:
+    level = float_parameter(sample_level(level, rng), 0.3)
+    if rng.uniform() > 0.5:
         level = -level
     return pil_img.transform(
         (IMAGE_SIZE, IMAGE_SIZE),
@@ -106,10 +106,10 @@ def shear_y(pil_img, level):
     )
 
 
-def translate_x(pil_img, level):
+def translate_x(pil_img, level, rng):
     """Translate the image along the x-axis."""
-    level = int_parameter(sample_level(level), IMAGE_SIZE / 3)
-    if np.random.random() > 0.5:
+    level = int_parameter(sample_level(level, rng), IMAGE_SIZE / 3)
+    if rng.random() > 0.5:
         level = -level
     return pil_img.transform(
         (IMAGE_SIZE, IMAGE_SIZE),
@@ -119,10 +119,10 @@ def translate_x(pil_img, level):
     )
 
 
-def translate_y(pil_img, level):
+def translate_y(pil_img, level, rng):
     """Translate the image along the y-axis."""
-    level = int_parameter(sample_level(level), IMAGE_SIZE / 3)
-    if np.random.random() > 0.5:
+    level = int_parameter(sample_level(level, rng), IMAGE_SIZE / 3)
+    if rng.random() > 0.5:
         level = -level
     return pil_img.transform(
         (IMAGE_SIZE, IMAGE_SIZE),
@@ -133,27 +133,27 @@ def translate_y(pil_img, level):
 
 
 # Operations that overlap with ImageNet-C's test set
-def color(pil_img, level):
+def color(pil_img, level, rng):
     """Adjust image color balance."""
-    level = float_parameter(sample_level(level), 1.8) + 0.1
+    level = float_parameter(sample_level(level, rng), 1.8) + 0.1
     return ImageEnhance.Color(pil_img).enhance(level)
 
 
-def contrast(pil_img, level):
+def contrast(pil_img, level, rng):
     """Adjust image contrast."""
-    level = float_parameter(sample_level(level), 1.8) + 0.1
+    level = float_parameter(sample_level(level, rng), 1.8) + 0.1
     return ImageEnhance.Contrast(pil_img).enhance(level)
 
 
-def brightness(pil_img, level):
+def brightness(pil_img, level, rng):
     """Adjust image brightness."""
-    level = float_parameter(sample_level(level), 1.8) + 0.1
+    level = float_parameter(sample_level(level, rng), 1.8) + 0.1
     return ImageEnhance.Brightness(pil_img).enhance(level)
 
 
-def sharpness(pil_img, level):
+def sharpness(pil_img, level, rng):
     """Adjust image sharpness."""
-    level = float_parameter(sample_level(level), 1.8) + 0.1
+    level = float_parameter(sample_level(level, rng), 1.8) + 0.1
     return ImageEnhance.Sharpness(pil_img).enhance(level)
 
 
@@ -192,12 +192,7 @@ augmentations_all = [
 # 2. AugMix data augmentation method
 # ============================================================
 
-# CIFAR-10 normalization constants
-MEAN = [0.4914, 0.4822, 0.4465]
-STD = [0.2023, 0.1994, 0.2010]
-
-
-def normalize(image):
+def normalize(image, mean, std):
     """Normalize input image channel-wise to zero mean and unit variance.
 
     Args:
@@ -208,12 +203,13 @@ def normalize(image):
         Normalized image with the same shape as the input.
     """
     image = image.transpose(2, 0, 1)  # Switch to channel-first
-    mean, std = np.array(MEAN), np.array(STD)
+    mean = np.array(mean, dtype=np.float32)
+    std = np.array(std, dtype=np.float32)
     image = (image - mean[:, None, None]) / std[:, None, None]
-    return image.transpose(1, 2, 0)
+    return image.transpose(1, 2, 0).astype(np.float32, copy=False)
 
 
-def apply_op(image, op, severity):
+def apply_op(image, op, severity, rng):
     """Apply one augmentation operation to an image.
 
     Args:
@@ -226,11 +222,20 @@ def apply_op(image, op, severity):
     """
     image = np.clip(image * 255.0, 0, 255).astype(np.uint8)
     pil_img = Image.fromarray(image)
-    pil_img = op(pil_img, severity)
+    pil_img = op(pil_img, severity, rng)
     return np.asarray(pil_img) / 255.0
 
 
-def augment_and_mix(image, severity=3, width=3, depth=-1, alpha=1.0):
+def augment_and_mix(
+    image,
+    mean,
+    std,
+    severity=3,
+    width=3,
+    depth=-1,
+    alpha=1.0,
+    rng=None,
+):
     """Perform AugMix augmentation and compute the final mixture.
 
     Args:
@@ -241,27 +246,29 @@ def augment_and_mix(image, severity=3, width=3, depth=-1, alpha=1.0):
         depth: Number of operations per chain. If -1, depth is sampled uniformly
                from {1, 2, 3}.
         alpha: Probability coefficient for Beta and Dirichlet distributions.
+        rng: Seeded NumPy generator used for all random AugMix choices.
 
     Returns:
         Augmented and mixed normalized image.
     """
-    ws = np.float32(np.random.dirichlet([alpha] * width))
-    m = np.float32(np.random.beta(alpha, alpha))
+    rng = rng or np.random.default_rng()
+    ws = np.float32(rng.dirichlet([alpha] * width))
+    m = np.float32(rng.beta(alpha, alpha))
 
     mix = np.zeros_like(image, dtype=np.float32)
 
     for i in range(width):
         image_aug = image.copy()
-        d = depth if depth > 0 else np.random.randint(1, 4)
+        d = depth if depth > 0 else rng.integers(1, 4)
 
         for _ in range(d):
-            op = np.random.choice(augmentations)
-            image_aug = apply_op(image_aug, op, severity)
+            op = rng.choice(augmentations)
+            image_aug = apply_op(image_aug, op, severity, rng)
 
         # Preprocessing commutes because all coefficients are convex.
-        mix += ws[i] * normalize(image_aug)
+        mix += ws[i] * normalize(image_aug, mean, std)
 
-    mixed = (1 - m) * normalize(image) + m * mix
+    mixed = (1 - m) * normalize(image, mean, std) + m * mix
     return mixed
 
 
@@ -284,6 +291,7 @@ class AugMixTransform:
         width: int = 3,
         depth: int = -1,
         alpha: float = 1.0,
+        seed: int | None = None,
     ):
         self.mean = mean
         self.std = std
@@ -291,6 +299,10 @@ class AugMixTransform:
         self.width = width
         self.depth = depth
         self.alpha = alpha
+        self.rng = np.random.default_rng(seed)
+
+    def set_seed(self, seed: int) -> None:
+        self.rng = np.random.default_rng(seed)
 
     def __call__(self, pil_img):
         import torch
@@ -299,10 +311,13 @@ class AugMixTransform:
 
         mixed = augment_and_mix(
             image,
+            mean=self.mean,
+            std=self.std,
             severity=self.severity,
             width=self.width,
             depth=self.depth,
             alpha=self.alpha,
+            rng=self.rng,
         )
 
         tensor = torch.from_numpy(mixed).permute(2, 0, 1).float()
@@ -316,17 +331,20 @@ class AugMixTransform:
 
 def _self_test():
     """Run a minimal test to confirm that AugMix works."""
-    np.random.seed(42)
+    rng = np.random.default_rng(42)
 
     # Create a random CIFAR-10-like image in [0, 1].
-    image = np.random.rand(IMAGE_SIZE, IMAGE_SIZE, 3).astype(np.float32)
+    image = rng.random((IMAGE_SIZE, IMAGE_SIZE, 3)).astype(np.float32)
 
     mixed = augment_and_mix(
         image,
+        mean=(0.4914, 0.4822, 0.4465),
+        std=(0.2470, 0.2435, 0.2616),
         severity=3,
         width=3,
         depth=-1,
         alpha=1.0,
+        rng=rng,
     )
 
     assert isinstance(mixed, np.ndarray), "Output must be a NumPy array."
