@@ -38,7 +38,7 @@ import math
 import random
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import torch
@@ -51,6 +51,12 @@ from models.vit import build_vit_cifar
 from augmentations.cutmix import CutMix
 from augmentations.augmix import AugMixTransform
 from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
+from augmentations.similarity_guided import (
+    apply_simmixup,
+    simmixup_accuracy,
+    simmixup_criterion,
+)
+from data.indexed_dataset import GuidedPairDataset
 
 
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
@@ -61,7 +67,7 @@ CIFAR100_STD = (0.2675, 0.2565, 0.2761)
 
 DatasetName = Literal["cifar10", "cifar100"]
 ModelName = Literal["resnet50", "vit"]
-AugmentationName = Literal["none", "mixup", "cutmix", "augmix"]
+AugmentationName = Literal["none", "mixup", "cutmix", "augmix", "simmixup"]
 
 
 @dataclass
@@ -81,6 +87,12 @@ class ExperimentConfig:
     split_root: str
     output_root: str
     num_workers: int
+    neighbor_path: str | None
+    guided_mode: str
+    neighbor_k: int
+    pair_sampling: str
+    mix_prob: float
+    mix_warmup_epochs: int
 
 
 # -----------------------------------------------------------------------------
@@ -227,11 +239,53 @@ def get_transforms(
         )
         return train_transform, eval_transform
 
-    if augmentation in {"mixup", "cutmix"}:
+    if augmentation in {"mixup", "cutmix", "simmixup"}:
         train_transform = eval_transform
         return train_transform, eval_transform
 
     raise ValueError(f"Unsupported augmentation: {augmentation}")
+
+
+def load_neighbor_payload(
+    path: str,
+    guided_mode: str,
+    neighbor_k: int,
+) -> dict[str, Any]:
+    """Load and optionally truncate a saved neighbor payload."""
+    neighbor_path = Path(path)
+    if not neighbor_path.exists():
+        raise FileNotFoundError(f"Missing neighbor file: {neighbor_path}")
+    if neighbor_k < 1:
+        raise ValueError("--neighbor-k must be at least 1")
+
+    payload = torch.load(neighbor_path, map_location="cpu")
+    required = {"mode", "original_indices", "neighbor_indices"}
+    missing = sorted(required.difference(payload))
+    if missing:
+        raise ValueError(f"Neighbor file is missing required keys: {missing}")
+
+    if payload["mode"] != guided_mode:
+        raise ValueError(
+            f"Neighbor file mode is {payload['mode']!r}, but --guided-mode is {guided_mode!r}"
+        )
+
+    neighbor_indices = torch.as_tensor(payload["neighbor_indices"], dtype=torch.long)
+    if neighbor_indices.ndim != 2:
+        raise ValueError("neighbor_indices must be a 2D tensor")
+    if neighbor_indices.shape[1] < neighbor_k:
+        raise ValueError(
+            f"--neighbor-k={neighbor_k} exceeds saved neighbor count "
+            f"{neighbor_indices.shape[1]}"
+        )
+
+    payload = dict(payload)
+    payload["neighbor_indices"] = neighbor_indices[:, :neighbor_k].clone()
+    if "similarities" in payload:
+        payload["similarities"] = torch.as_tensor(payload["similarities"], dtype=torch.float32)[
+            :, :neighbor_k
+        ].clone()
+    payload["num_neighbors"] = int(neighbor_k)
+    return payload
 
 
 
@@ -282,7 +336,24 @@ def build_dataloaders(
         transform=eval_transform,
     )
 
-    train_dataset = Subset(train_full, train_indices)
+    if config.augmentation == "simmixup":
+        if config.neighbor_path is None:
+            raise ValueError("--neighbor-path is required when --augmentation simmixup")
+        neighbor_payload = load_neighbor_payload(
+            path=config.neighbor_path,
+            guided_mode=config.guided_mode,
+            neighbor_k=config.neighbor_k,
+        )
+        train_dataset = GuidedPairDataset(
+            base_dataset=train_full,
+            train_indices=train_indices,
+            neighbor_index=neighbor_payload,
+            pair_sampling=config.pair_sampling,
+            mode=config.guided_mode,
+            seed=config.train_seed,
+        )
+    else:
+        train_dataset = Subset(train_full, train_indices)
     val_dataset = Subset(val_full, val_indices)
 
     pin_memory = device.type == "cuda"
@@ -346,6 +417,7 @@ def train_one_epoch(
     augmentation: str = "none",
     cutmix=None,
     mixup_alpha: float = 1.0,
+    mix_prob: float = 1.0,
     augmentation_rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
 
@@ -355,18 +427,60 @@ def train_one_epoch(
     total_correct = 0.0
     total_examples = 0
 
-    for images, targets in dataloader:
-
-        images = images.to(device)
-        targets = targets.to(device)
+    for batch in dataloader:
 
         optimizer.zero_grad(set_to_none=True)
+
+        # =====================================================
+        # SIMMIXUP
+        # =====================================================
+
+        if augmentation == "simmixup":
+
+            images_i, targets_i, images_j, targets_j, *_ = batch
+            images_i = images_i.to(device)
+            targets_i = targets_i.to(device)
+            images_j = images_j.to(device)
+            targets_j = targets_j.to(device)
+
+            images, targets_a, targets_b, lam = apply_simmixup(
+                images_i=images_i,
+                targets_i=targets_i,
+                images_j=images_j,
+                targets_j=targets_j,
+                alpha=mixup_alpha,
+                mix_prob=mix_prob,
+                rng=augmentation_rng,
+            )
+
+            logits = model(images)
+
+            loss = simmixup_criterion(
+                criterion=criterion,
+                predictions=logits,
+                targets_i=targets_a,
+                targets_j=targets_b,
+                lam=lam,
+            )
+
+            batch_correct = simmixup_accuracy(
+                predictions=logits,
+                targets_i=targets_a,
+                targets_j=targets_b,
+                lam=lam,
+            )
+
+            batch_size = targets_i.size(0)
 
         # =====================================================
         # CUTMIX
         # =====================================================
 
-        if augmentation == "cutmix":
+        elif augmentation == "cutmix":
+
+            images, targets = batch
+            images = images.to(device)
+            targets = targets.to(device)
 
             images, targets_a, targets_b, lam = cutmix(images, targets)
 
@@ -383,11 +497,17 @@ def train_one_epoch(
                 + (1.0 - lam) * predicted.eq(targets_b).float()
             ).sum().item()
 
+            batch_size = targets.size(0)
+
         # =====================================================
         # MIXUP
         # =====================================================
 
         elif augmentation == "mixup":
+
+            images, targets = batch
+            images = images.to(device)
+            targets = targets.to(device)
 
             images, targets_a, targets_b, lam = apply_mixup(
                 images=images,
@@ -413,11 +533,17 @@ def train_one_epoch(
                 lam=lam,
             )
 
+            batch_size = targets.size(0)
+
         # =====================================================
         # NO AUGMENTATION
         # =====================================================
 
         else:
+
+            images, targets = batch
+            images = images.to(device)
+            targets = targets.to(device)
 
             logits = model(images)
 
@@ -425,10 +551,10 @@ def train_one_epoch(
 
             batch_correct = (logits.argmax(dim=1) == targets).sum().item()
 
+            batch_size = targets.size(0)
+
         loss.backward()
         optimizer.step()
-
-        batch_size = targets.size(0)
 
         total_loss += loss.item() * batch_size
         total_correct += batch_correct
@@ -558,6 +684,14 @@ def run_experiment(config: ExperimentConfig) -> None:
     
 
     for epoch in range(1, config.epochs + 1):
+        train_dataset = getattr(train_loader, "dataset", None)
+        if hasattr(train_dataset, "set_epoch"):
+            train_dataset.set_epoch(epoch)
+
+        effective_mix_prob = config.mix_prob
+        if config.augmentation == "simmixup" and epoch <= config.mix_warmup_epochs:
+            effective_mix_prob = 0.0
+
         train_loss, train_acc = train_one_epoch(
             model=model,
             dataloader=train_loader,
@@ -567,6 +701,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             augmentation=config.augmentation,
             cutmix=cutmix,
             mixup_alpha=config.mixup_alpha,
+            mix_prob=effective_mix_prob,
             augmentation_rng=augmentation_rng,
         )
 
@@ -661,7 +796,7 @@ def parse_args() -> ExperimentConfig:
     '--augmentation',
     type=str,
     default='none',
-    choices=["none", "mixup", "cutmix", "augmix"],
+    choices=["none", "mixup", "cutmix", "augmix", "simmixup"],
     help='augmentation method'
     )
     parser.add_argument("--epochs", type=int, default=30)
@@ -684,6 +819,44 @@ def parse_args() -> ExperimentConfig:
         default=0,
         help="Use 0 on Windows for fewer DataLoader issues.",
     )
+    parser.add_argument(
+        "--neighbor-path",
+        type=str,
+        default=None,
+        help="Path to saved neighbor payload for similarity-guided augmentation.",
+    )
+    parser.add_argument(
+        "--guided-mode",
+        type=str,
+        default="class_aware",
+        choices=["class_aware", "class_agnostic"],
+        help="Neighbor mode expected in --neighbor-path.",
+    )
+    parser.add_argument(
+        "--neighbor-k",
+        type=int,
+        default=10,
+        help="Number of nearest neighbors to sample from.",
+    )
+    parser.add_argument(
+        "--pair-sampling",
+        type=str,
+        default="uniform",
+        choices=["uniform", "weighted"],
+        help="How to sample partners from each saved neighbor set.",
+    )
+    parser.add_argument(
+        "--mix-prob",
+        type=float,
+        default=1.0,
+        help="Probability of applying SimMixUp to a paired batch.",
+    )
+    parser.add_argument(
+        "--mix-warmup-epochs",
+        type=int,
+        default=0,
+        help="Disable SimMixUp for the first N epochs.",
+    )
 
     args = parser.parse_args()
 
@@ -703,6 +876,12 @@ def parse_args() -> ExperimentConfig:
         split_root=args.split_root,
         output_root=args.output_root,
         num_workers=args.num_workers,
+        neighbor_path=args.neighbor_path,
+        guided_mode=args.guided_mode,
+        neighbor_k=args.neighbor_k,
+        pair_sampling=args.pair_sampling,
+        mix_prob=args.mix_prob,
+        mix_warmup_epochs=args.mix_warmup_epochs,
     )
 
 
