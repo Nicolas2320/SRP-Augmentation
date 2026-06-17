@@ -122,7 +122,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
-    parser.add_argument("--encoder", choices=["resnet18_imagenet"], required=True)
+    parser.add_argument("--encoder", choices=["resnet50_imagenet"], required=True)
     parser.add_argument("--mode", choices=["class_aware", "class_agnostic"], required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
     parser.add_argument("--split-root", type=str, default="data/splits")
