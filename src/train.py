@@ -596,11 +596,46 @@ def evaluate(
 
 def experiment_name(config: ExperimentConfig) -> str:
     """Create a consistent experiment name for files."""
-    return (
+    base_name = (
         f"{config.dataset}_{config.model}_"
         f"k{config.k}_seed{config.subset_seed}_"
-        f"{config.augmentation}_epochs{config.epochs}"
+        f"{config.augmentation}"
     )
+
+    if config.augmentation != "simmixup":
+        return f"{base_name}_epochs{config.epochs}"
+
+    alpha = format_float_for_filename(config.mixup_alpha)
+    mix_prob = format_float_for_filename(config.mix_prob)
+    neighbor_source = filename_component(
+        Path(config.neighbor_path).stem if config.neighbor_path else "no_neighbor_file"
+    )
+    return (
+        f"{base_name}_{config.guided_mode}_"
+        f"{neighbor_source}_"
+        f"nk{config.neighbor_k}_{config.pair_sampling}_"
+        f"alpha{alpha}_mp{mix_prob}_warm{config.mix_warmup_epochs}_"
+        f"epochs{config.epochs}"
+    )
+
+
+def format_float_for_filename(value: float) -> str:
+    """Format a float compactly for deterministic filename components."""
+    return filename_component(f"{value:g}")
+
+
+def filename_component(value: str) -> str:
+    """Make a short value safe for use inside experiment filenames."""
+    safe_chars = []
+    for character in str(value):
+        if character.isalnum() or character in {"_", "-"}:
+            safe_chars.append(character)
+        elif character == ".":
+            safe_chars.append("p")
+        else:
+            safe_chars.append("_")
+    return "".join(safe_chars)
+
 
 def save_metrics_csv(metrics: list[dict], output_path: Path) -> None:
     """Save epoch-level metrics."""

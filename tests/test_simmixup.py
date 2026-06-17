@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from src.augmentations.similarity_guided import apply_simmixup, simmixup_criterion
-from src.train import train_one_epoch
+from src.train import ExperimentConfig, experiment_name, train_one_epoch
 
 
 class FixedRng:
@@ -192,6 +192,39 @@ class SimMixUpTests(unittest.TestCase):
         self.assertTrue(np.isfinite(loss))
         self.assertGreaterEqual(accuracy, 0.0)
         self.assertLessEqual(accuracy, 1.0)
+
+    def test_experiment_name_separates_simmixup_variants(self):
+        base = dict(
+            dataset="cifar100",
+            model="resnet50",
+            k=100,
+            subset_seed=0,
+            augmentation="simmixup",
+            mixup_alpha=1.0,
+            epochs=50,
+            batch_size=64,
+            lr=1e-3,
+            weight_decay=1e-4,
+            train_seed=0,
+            data_root="data/raw",
+            split_root="data/splits",
+            output_root="results",
+            num_workers=0,
+            neighbor_path="neighbors.pt",
+            guided_mode="class_aware",
+            neighbor_k=10,
+            pair_sampling="uniform",
+            mix_prob=1.0,
+            mix_warmup_epochs=0,
+        )
+        class_aware = ExperimentConfig(**base)
+        class_agnostic = ExperimentConfig(**{**base, "guided_mode": "class_agnostic"})
+        lower_mix_prob = ExperimentConfig(**{**base, "mix_prob": 0.5})
+
+        self.assertNotEqual(experiment_name(class_aware), experiment_name(class_agnostic))
+        self.assertNotEqual(experiment_name(class_aware), experiment_name(lower_mix_prob))
+        self.assertIn("class_aware", experiment_name(class_aware))
+        self.assertIn("mp0p5", experiment_name(lower_mix_prob))
 
 
 if __name__ == "__main__":

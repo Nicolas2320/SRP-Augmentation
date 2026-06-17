@@ -20,6 +20,11 @@
       "path": "results\\neighbors\\cifar100\\k100_seed0\\neighbors_class_aware_K20.pt",
       "requested_max_neighbors": 20,
       "num_neighbors": 20
+    },
+    "class_agnostic": {
+      "path": "results\\neighbors\\cifar100\\k100_seed0\\neighbors_class_agnostic_K20.pt",
+      "requested_max_neighbors": 20,
+      "num_neighbors": 20
     }
   }
 }

@@ -25,13 +25,14 @@ import pandas as pd
 METRICS_DIR = Path("results/metrics")
 FIGURES_DIR = Path("results/figures")
 
-AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix"]
+AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup"]
 MODEL_ORDER = ["resnet50", "vit"]
 COLORS = {
     "none": "#4C566A",
     "mixup": "#5E81AC",
     "cutmix": "#A3BE8C",
     "augmix": "#D08770",
+    "simmixup": "#B48EAD",
 }
 
 
@@ -41,6 +42,58 @@ def save_current_figure(path: Path, tight_layout: bool = True) -> None:
         plt.tight_layout()
     plt.savefig(path, dpi=180, bbox_inches="tight")
     plt.close()
+
+
+def format_float_label(value) -> str:
+    return f"{float(value):g}".replace(".", "p")
+
+
+def augmentation_label(data: dict) -> str:
+    """Return a plot label that keeps SimMixUp variants separate."""
+    augmentation = data["augmentation"]
+    if augmentation != "simmixup":
+        return augmentation
+
+    guided_mode = data.get("guided_mode", "unknown")
+    neighbor_path = data.get("neighbor_path")
+    neighbor_source = Path(neighbor_path).stem if neighbor_path else "unknown_neighbors"
+    neighbor_k = data.get("neighbor_k", "na")
+    pair_sampling = data.get("pair_sampling", "uniform")
+    mix_prob = format_float_label(data.get("mix_prob", 1.0))
+    warmup = int(data.get("mix_warmup_epochs", 0))
+
+    label = (
+        f"simmixup_{guided_mode}_{neighbor_source}_"
+        f"nk{neighbor_k}_{pair_sampling}_mp{mix_prob}"
+    )
+    if warmup > 0:
+        label = f"{label}_warm{warmup}"
+    return label
+
+
+def augmentation_base(label: str) -> str:
+    for augmentation in AUGMENTATION_ORDER:
+        if label == augmentation or label.startswith(f"{augmentation}_"):
+            return augmentation
+    return label
+
+
+def augmentation_sort_key(label: str) -> tuple[int, str]:
+    base = augmentation_base(label)
+    try:
+        base_index = AUGMENTATION_ORDER.index(base)
+    except ValueError:
+        base_index = len(AUGMENTATION_ORDER)
+    return base_index, label
+
+
+def ordered_augmentations(df: pd.DataFrame) -> list[str]:
+    labels = [str(label) for label in df["augmentation"].dropna().unique()]
+    return sorted(labels, key=augmentation_sort_key)
+
+
+def augmentation_color(label: str) -> str:
+    return COLORS.get(augmentation_base(label), "#888888")
 
 
 def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
@@ -56,7 +109,8 @@ def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
                 "model": data["model"],
                 "k": int(data["k"]),
                 "subset_seed": int(data["subset_seed"]),
-                "augmentation": data["augmentation"],
+                "augmentation": augmentation_label(data),
+                "base_augmentation": data["augmentation"],
                 "best_epoch": int(data["best_epoch"]),
                 "best_val_acc": float(data["best_val_acc"]),
                 "test_acc": float(data["test_acc_best_checkpoint"]),
@@ -69,9 +123,10 @@ def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"No summary JSON files found in {metrics_dir}")
 
     df = pd.DataFrame(rows)
+    augmentation_categories = ordered_augmentations(df)
     df["augmentation"] = pd.Categorical(
         df["augmentation"],
-        categories=AUGMENTATION_ORDER,
+        categories=augmentation_categories,
         ordered=True,
     )
     df["model"] = pd.Categorical(df["model"], categories=MODEL_ORDER, ordered=True)
@@ -150,7 +205,7 @@ def plot_test_accuracy_by_augmentation(summary: pd.DataFrame) -> None:
         labels = subset["augmentation"].astype(str).tolist()
         values = subset["mean_test_acc"].tolist()
         errors = subset["std_test_acc"].tolist()
-        colors = [COLORS.get(label, "#888888") for label in labels]
+        colors = [augmentation_color(label) for label in labels]
 
         ax.bar(labels, values, yerr=errors, color=colors, edgecolor="#2E3440", linewidth=0.8)
         ax.set_title(f"{combo.dataset} | {combo.model} | k={combo.k}")
@@ -177,7 +232,7 @@ def plot_test_accuracy_vs_k(summary: pd.DataFrame) -> None:
     for ax, model in zip(axes.flatten(), models):
         model_df = summary[summary["model"].astype(str) == model]
 
-        for augmentation in AUGMENTATION_ORDER:
+        for augmentation in ordered_augmentations(model_df):
             subset = model_df[model_df["augmentation"].astype(str) == augmentation].sort_values("k")
             if subset.empty:
                 continue
@@ -188,7 +243,7 @@ def plot_test_accuracy_vs_k(summary: pd.DataFrame) -> None:
                 marker="o",
                 linewidth=2,
                 label=augmentation,
-                color=COLORS.get(augmentation),
+                color=augmentation_color(augmentation),
             )
 
         ax.set_title(model)
@@ -227,7 +282,7 @@ def plot_val_accuracy_curves(epoch_metrics: pd.DataFrame) -> None:
             & (curve_df["k"] == combo.k)
         ]
 
-        for augmentation in AUGMENTATION_ORDER:
+        for augmentation in ordered_augmentations(subset):
             aug_df = subset[subset["augmentation"].astype(str) == augmentation]
             if aug_df.empty:
                 continue
@@ -237,7 +292,7 @@ def plot_val_accuracy_curves(epoch_metrics: pd.DataFrame) -> None:
                 aug_df["mean_val_acc"],
                 linewidth=2,
                 label=augmentation,
-                color=COLORS.get(augmentation),
+                color=augmentation_color(augmentation),
             )
 
         ax.set_title(f"{combo.dataset} | {combo.model} | k={combo.k}")
@@ -269,9 +324,9 @@ def plot_baseline_improvement(summary: pd.DataFrame) -> None:
     )
 
     experiments = improved["experiment"].drop_duplicates().tolist()
-    augmentations = [aug for aug in AUGMENTATION_ORDER if aug != "none"]
+    augmentations = [aug for aug in ordered_augmentations(improved) if aug != "none"]
     x = range(len(experiments))
-    width = 0.24
+    width = min(0.8 / max(len(augmentations), 1), 0.24)
 
     fig, ax = plt.subplots(figsize=(max(9, len(experiments) * 1.3), 5))
 
@@ -283,13 +338,13 @@ def plot_baseline_improvement(summary: pd.DataFrame) -> None:
             else 0.0
             for experiment in experiments
         ]
-        positions = [i + (offset - 1) * width for i in x]
+        positions = [i + (offset - (len(augmentations) - 1) / 2) * width for i in x]
         ax.bar(
             positions,
             values,
             width=width,
             label=augmentation,
-            color=COLORS.get(augmentation),
+            color=augmentation_color(augmentation),
             edgecolor="#2E3440",
             linewidth=0.7,
         )
@@ -319,7 +374,7 @@ def plot_test_accuracy_heatmap(summary: pd.DataFrame) -> None:
             columns="k",
             values="mean_test_acc",
             observed=True,
-        ).reindex(AUGMENTATION_ORDER)
+        ).reindex(ordered_augmentations(model_df))
 
         image = ax.imshow(heatmap_data, cmap="YlGnBu", vmin=0, vmax=max_acc)
         ax.set_title(model)
