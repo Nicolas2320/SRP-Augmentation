@@ -52,6 +52,7 @@ from augmentations.cutmix import CutMix
 from augmentations.augmix import AugMixTransform
 from augmentations.mixup import apply_mixup, mixup_accuracy, mixup_criterion
 from augmentations.similarity_guided import (
+    apply_simcutmix,
     apply_simmixup,
     simmixup_accuracy,
     simmixup_criterion,
@@ -67,7 +68,7 @@ CIFAR100_STD = (0.2675, 0.2565, 0.2761)
 
 DatasetName = Literal["cifar10", "cifar100"]
 ModelName = Literal["resnet50", "vit"]
-AugmentationName = Literal["none", "mixup", "cutmix", "augmix", "simmixup"]
+AugmentationName = Literal["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 
 
 @dataclass
@@ -90,6 +91,7 @@ class ExperimentConfig:
     neighbor_path: str | None
     guided_mode: str
     neighbor_k: int
+    neighbor_rank_start: int
     pair_sampling: str
     mix_prob: float
     mix_warmup_epochs: int
@@ -239,7 +241,7 @@ def get_transforms(
         )
         return train_transform, eval_transform
 
-    if augmentation in {"mixup", "cutmix", "simmixup"}:
+    if augmentation in {"mixup", "cutmix", "simmixup", "simcutmix"}:
         train_transform = eval_transform
         return train_transform, eval_transform
 
@@ -250,6 +252,7 @@ def load_neighbor_payload(
     path: str,
     guided_mode: str,
     neighbor_k: int,
+    neighbor_rank_start: int = 1,
 ) -> dict[str, Any]:
     """Load and optionally truncate a saved neighbor payload."""
     neighbor_path = Path(path)
@@ -257,6 +260,8 @@ def load_neighbor_payload(
         raise FileNotFoundError(f"Missing neighbor file: {neighbor_path}")
     if neighbor_k < 1:
         raise ValueError("--neighbor-k must be at least 1")
+    if neighbor_rank_start < 1:
+        raise ValueError("--neighbor-rank-start must be at least 1")
 
     payload = torch.load(neighbor_path, map_location="cpu")
     required = {"mode", "original_indices", "neighbor_indices"}
@@ -272,19 +277,24 @@ def load_neighbor_payload(
     neighbor_indices = torch.as_tensor(payload["neighbor_indices"], dtype=torch.long)
     if neighbor_indices.ndim != 2:
         raise ValueError("neighbor_indices must be a 2D tensor")
-    if neighbor_indices.shape[1] < neighbor_k:
+    rank_start_idx = neighbor_rank_start - 1
+    rank_end_idx = rank_start_idx + neighbor_k
+    rank_end = neighbor_rank_start + neighbor_k - 1
+    if neighbor_indices.shape[1] < rank_end_idx:
         raise ValueError(
-            f"--neighbor-k={neighbor_k} exceeds saved neighbor count "
-            f"{neighbor_indices.shape[1]}"
+            f"Requested neighbor rank window {neighbor_rank_start}-{rank_end} "
+            f"exceeds saved neighbor count {neighbor_indices.shape[1]}"
         )
 
     payload = dict(payload)
-    payload["neighbor_indices"] = neighbor_indices[:, :neighbor_k].clone()
+    payload["neighbor_indices"] = neighbor_indices[:, rank_start_idx:rank_end_idx].clone()
     if "similarities" in payload:
         payload["similarities"] = torch.as_tensor(payload["similarities"], dtype=torch.float32)[
-            :, :neighbor_k
+            :, rank_start_idx:rank_end_idx
         ].clone()
     payload["num_neighbors"] = int(neighbor_k)
+    payload["neighbor_rank_start"] = int(neighbor_rank_start)
+    payload["neighbor_rank_end"] = int(rank_end)
     return payload
 
 
@@ -336,13 +346,14 @@ def build_dataloaders(
         transform=eval_transform,
     )
 
-    if config.augmentation == "simmixup":
+    if config.augmentation in {"simmixup", "simcutmix"}:
         if config.neighbor_path is None:
-            raise ValueError("--neighbor-path is required when --augmentation simmixup")
+            raise ValueError(f"--neighbor-path is required when --augmentation {config.augmentation}")
         neighbor_payload = load_neighbor_payload(
             path=config.neighbor_path,
             guided_mode=config.guided_mode,
             neighbor_k=config.neighbor_k,
+            neighbor_rank_start=config.neighbor_rank_start,
         )
         train_dataset = GuidedPairDataset(
             base_dataset=train_full,
@@ -432,10 +443,51 @@ def train_one_epoch(
         optimizer.zero_grad(set_to_none=True)
 
         # =====================================================
+        # SIMCUTMIX
+        # =====================================================
+
+        if augmentation == "simcutmix":
+
+            images_i, targets_i, images_j, targets_j, *_ = batch
+            images_i = images_i.to(device)
+            targets_i = targets_i.to(device)
+            images_j = images_j.to(device)
+            targets_j = targets_j.to(device)
+
+            images, targets_a, targets_b, lam = apply_simcutmix(
+                images_i=images_i,
+                targets_i=targets_i,
+                images_j=images_j,
+                targets_j=targets_j,
+                alpha=mixup_alpha,
+                mix_prob=mix_prob,
+                rng=augmentation_rng,
+            )
+
+            logits = model(images)
+
+            loss = simmixup_criterion(
+                criterion=criterion,
+                predictions=logits,
+                targets_i=targets_a,
+                targets_j=targets_b,
+                lam=lam,
+            )
+
+            batch_correct = simmixup_accuracy(
+                predictions=logits,
+                targets_i=targets_a,
+                targets_j=targets_b,
+                lam=lam,
+            )
+
+            batch_size = targets_i.size(0)
+
+        # =====================================================
         # SIMMIXUP
         # =====================================================
 
-        if augmentation == "simmixup":
+        elif augmentation == "simmixup":
 
             images_i, targets_i, images_j, targets_j, *_ = batch
             images_i = images_i.to(device)
@@ -602,18 +654,20 @@ def experiment_name(config: ExperimentConfig) -> str:
         f"{config.augmentation}"
     )
 
-    if config.augmentation != "simmixup":
+    if config.augmentation not in {"simmixup", "simcutmix"}:
         return f"{base_name}_epochs{config.epochs}"
 
     alpha = format_float_for_filename(config.mixup_alpha)
     mix_prob = format_float_for_filename(config.mix_prob)
+    rank_start = int(config.neighbor_rank_start)
+    rank_end = rank_start + int(config.neighbor_k) - 1
     neighbor_source = filename_component(
         Path(config.neighbor_path).stem if config.neighbor_path else "no_neighbor_file"
     )
     return (
         f"{base_name}_{config.guided_mode}_"
         f"{neighbor_source}_"
-        f"nk{config.neighbor_k}_{config.pair_sampling}_"
+        f"nk{config.neighbor_k}_r{rank_start}-{rank_end}_{config.pair_sampling}_"
         f"alpha{alpha}_mp{mix_prob}_warm{config.mix_warmup_epochs}_"
         f"epochs{config.epochs}"
     )
@@ -645,27 +699,36 @@ def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) 
         return ""
 
     neighbor_k = int(getattr(train_dataset, "neighbor_indices").shape[1])
+    rank_start = int(getattr(train_dataset, "neighbor_rank_start", 1))
+    rank_end = rank_start + neighbor_k - 1
     if effective_mix_prob <= 0.0:
-        return f" | neighbor_k={neighbor_k} | neighbor_rank=disabled"
+        return (
+            f" | neighbor_k={neighbor_k} | "
+            f"neighbor_rank_window={rank_start}-{rank_end} disabled"
+        )
 
     counts = rank_counter()
     total = int(counts.sum().item())
     if total == 0:
-        return f" | neighbor_k={neighbor_k} | neighbor_rank=none"
+        return (
+            f" | neighbor_k={neighbor_k} | "
+            f"neighbor_rank_window={rank_start}-{rank_end} none"
+        )
 
-    ranks = torch.arange(1, counts.numel() + 1, dtype=torch.float32)
+    ranks = torch.arange(rank_start, rank_end + 1, dtype=torch.float32)
     mean_rank = float((counts.float() * ranks).sum().item() / total)
     nonzero = torch.nonzero(counts, as_tuple=False).flatten()
-    min_rank = int(nonzero[0].item()) + 1
-    max_rank = int(nonzero[-1].item()) + 1
+    min_rank = int(nonzero[0].item()) + rank_start
+    max_rank = int(nonzero[-1].item()) + rank_start
     count_text = ",".join(
         f"{rank}:{int(count)}"
-        for rank, count in enumerate(counts.tolist(), start=1)
+        for rank, count in enumerate(counts.tolist(), start=rank_start)
     )
 
     return (
         f" | neighbor_k={neighbor_k} | "
-        f"neighbor_rank={min_rank}-{max_rank} mean={mean_rank:.2f} | "
+        f"neighbor_rank_window={rank_start}-{rank_end} | "
+        f"sampled_rank={min_rank}-{max_rank} mean={mean_rank:.2f} | "
         f"rank_counts={count_text}"
     )
 
@@ -757,7 +820,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             train_dataset.set_epoch(epoch)
 
         effective_mix_prob = config.mix_prob
-        if config.augmentation == "simmixup" and epoch <= config.mix_warmup_epochs:
+        if config.augmentation in {"simmixup", "simcutmix"} and epoch <= config.mix_warmup_epochs:
             effective_mix_prob = 0.0
         neighbor_rank_summary = format_neighbor_rank_summary(
             train_dataset=train_dataset,
@@ -869,7 +932,7 @@ def parse_args() -> ExperimentConfig:
     '--augmentation',
     type=str,
     default='none',
-    choices=["none", "mixup", "cutmix", "augmix", "simmixup"],
+    choices=["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"],
     help='augmentation method'
     )
     parser.add_argument("--epochs", type=int, default=30)
@@ -912,6 +975,15 @@ def parse_args() -> ExperimentConfig:
         help="Number of nearest neighbors to sample from.",
     )
     parser.add_argument(
+        "--neighbor-rank-start",
+        type=int,
+        default=1,
+        help=(
+            "1-indexed first neighbor rank to sample from. Combined with "
+            "--neighbor-k to define the inclusive rank window."
+        ),
+    )
+    parser.add_argument(
         "--pair-sampling",
         type=str,
         default="uniform",
@@ -952,6 +1024,7 @@ def parse_args() -> ExperimentConfig:
         neighbor_path=args.neighbor_path,
         guided_mode=args.guided_mode,
         neighbor_k=args.neighbor_k,
+        neighbor_rank_start=args.neighbor_rank_start,
         pair_sampling=args.pair_sampling,
         mix_prob=args.mix_prob,
         mix_warmup_epochs=args.mix_warmup_epochs,

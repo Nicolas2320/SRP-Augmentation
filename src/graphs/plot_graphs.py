@@ -56,6 +56,16 @@ def format_float_label(value) -> str:
     return f"{float(value):g}".replace(".", "p")
 
 
+def neighbor_rank_label(data: dict) -> str:
+    neighbor_k = data.get("neighbor_k", "na")
+    rank_start = int(data.get("neighbor_rank_start", 1))
+    try:
+        rank_end = rank_start + int(neighbor_k) - 1
+    except (TypeError, ValueError):
+        rank_end = "?"
+    return f"r{rank_start}-{rank_end}"
+
+
 def augmentation_label(data: dict) -> str:
     """Return a plot label that keeps SimMixUp variants separate."""
     augmentation = data["augmentation"]
@@ -64,6 +74,7 @@ def augmentation_label(data: dict) -> str:
 
     guided_mode = data.get("guided_mode", "unknown")
     neighbor_k = data.get("neighbor_k", "na")
+    rank_label = neighbor_rank_label(data)
     pair_sampling = data.get("pair_sampling", "uniform")
     mix_prob = format_float_label(data.get("mix_prob", 1.0))
     warmup = int(data.get("mix_warmup_epochs", 0))
@@ -72,7 +83,7 @@ def augmentation_label(data: dict) -> str:
         "class_agnostic": "cg",
     }.get(guided_mode, guided_mode)
 
-    label = f"simmixup_{guided_short}_nk{neighbor_k}_{pair_sampling}_mp{mix_prob}"
+    label = f"simmixup_{guided_short}_nk{neighbor_k}_{rank_label}_{pair_sampling}_mp{mix_prob}"
     if warmup > 0:
         label = f"{label}_warm{warmup}"
     return label
@@ -128,8 +139,11 @@ def augmentation_display_label(label: str) -> str:
     }.get(mode, mode.upper())
 
     neighbor_k = next((part[2:] for part in parts if part.startswith("nk")), "?")
+    rank_window = next((part[1:] for part in parts if part.startswith("r") and "-" in part), None)
     mix_prob = next((part[2:] for part in parts if part.startswith("mp")), "1")
     display = f"SMU-{mode_name} k{neighbor_k}"
+    if rank_window is not None:
+        display = f"{display} r{rank_window}"
     if mix_prob != "1":
         display = f"{display} p{mix_prob}"
     return display

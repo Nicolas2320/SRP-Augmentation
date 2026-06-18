@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from src.augmentations.similarity_guided import apply_simmixup, simmixup_criterion
-from src.train import ExperimentConfig, experiment_name, train_one_epoch
+from src.train import ExperimentConfig, experiment_name, load_neighbor_payload, train_one_epoch
 
 
 class FixedRng:
@@ -213,6 +214,7 @@ class SimMixUpTests(unittest.TestCase):
             neighbor_path="neighbors.pt",
             guided_mode="class_aware",
             neighbor_k=10,
+            neighbor_rank_start=1,
             pair_sampling="uniform",
             mix_prob=1.0,
             mix_warmup_epochs=0,
@@ -220,11 +222,55 @@ class SimMixUpTests(unittest.TestCase):
         class_aware = ExperimentConfig(**base)
         class_agnostic = ExperimentConfig(**{**base, "guided_mode": "class_agnostic"})
         lower_mix_prob = ExperimentConfig(**{**base, "mix_prob": 0.5})
+        later_rank_window = ExperimentConfig(**{**base, "neighbor_rank_start": 21})
 
         self.assertNotEqual(experiment_name(class_aware), experiment_name(class_agnostic))
         self.assertNotEqual(experiment_name(class_aware), experiment_name(lower_mix_prob))
+        self.assertNotEqual(experiment_name(class_aware), experiment_name(later_rank_window))
         self.assertIn("class_aware", experiment_name(class_aware))
+        self.assertIn("r1-10", experiment_name(class_aware))
+        self.assertIn("r21-30", experiment_name(later_rank_window))
         self.assertIn("mp0p5", experiment_name(lower_mix_prob))
+
+    def test_load_neighbor_payload_selects_rank_window(self):
+        payload = {
+            "mode": "class_agnostic",
+            "original_indices": torch.tensor([0, 1]),
+            "neighbor_indices": torch.tensor(
+                [
+                    [10, 11, 12, 13],
+                    [20, 21, 22, 23],
+                ]
+            ),
+            "similarities": torch.tensor(
+                [
+                    [0.9, 0.8, 0.7, 0.6],
+                    [0.5, 0.4, 0.3, 0.2],
+                ]
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            neighbor_path = Path(temp_dir) / "neighbors.pt"
+            torch.save(payload, neighbor_path)
+
+            loaded = load_neighbor_payload(
+                path=str(neighbor_path),
+                guided_mode="class_agnostic",
+                neighbor_k=2,
+                neighbor_rank_start=3,
+            )
+
+        self.assertTrue(torch.equal(loaded["neighbor_indices"], torch.tensor([[12, 13], [22, 23]])))
+        self.assertTrue(
+            torch.equal(
+                loaded["similarities"],
+                torch.tensor([[0.7, 0.6], [0.3, 0.2]]),
+            )
+        )
+        self.assertEqual(loaded["num_neighbors"], 2)
+        self.assertEqual(loaded["neighbor_rank_start"], 3)
+        self.assertEqual(loaded["neighbor_rank_end"], 4)
 
 
 if __name__ == "__main__":

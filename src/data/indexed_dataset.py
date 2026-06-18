@@ -78,6 +78,7 @@ class GuidedPairDataset(Dataset):
 
         self.original_indices = original_indices
         self.neighbor_indices = neighbor_indices
+        self.neighbor_rank_start = int(payload.get("neighbor_rank_start", 1))
         self.row_by_global_index = _build_index_lookup(original_indices)
 
         missing = sorted(index for index in self.train_indices if index not in self.row_by_global_index)
