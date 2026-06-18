@@ -198,6 +198,21 @@ class IndexedDatasetTests(unittest.TestCase):
 
         self.assertNotEqual(first_partners, second_partners)
 
+    def test_sampled_neighbor_rank_counts_cover_current_epoch_pairs(self):
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            self.train_indices,
+            class_aware_neighbors(),
+            mode="class_aware",
+            seed=0,
+        )
+
+        counts = dataset.sampled_neighbor_rank_counts()
+
+        self.assertEqual(counts.numel(), 2)
+        self.assertEqual(int(counts.sum().item()), len(self.train_indices))
+        self.assertTrue(torch.all(counts >= 0))
+
 
 class ExistingTrainingShapeTests(unittest.TestCase):
     def test_existing_augmentation_modes_still_train_on_two_item_batches(self):

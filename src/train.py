@@ -637,6 +637,39 @@ def filename_component(value: str) -> str:
     return "".join(safe_chars)
 
 
+def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) -> str:
+    """Format sampled SimMixUp neighbor-rank counts for epoch logging."""
+
+    rank_counter = getattr(train_dataset, "sampled_neighbor_rank_counts", None)
+    if not callable(rank_counter):
+        return ""
+
+    neighbor_k = int(getattr(train_dataset, "neighbor_indices").shape[1])
+    if effective_mix_prob <= 0.0:
+        return f" | neighbor_k={neighbor_k} | neighbor_rank=disabled"
+
+    counts = rank_counter()
+    total = int(counts.sum().item())
+    if total == 0:
+        return f" | neighbor_k={neighbor_k} | neighbor_rank=none"
+
+    ranks = torch.arange(1, counts.numel() + 1, dtype=torch.float32)
+    mean_rank = float((counts.float() * ranks).sum().item() / total)
+    nonzero = torch.nonzero(counts, as_tuple=False).flatten()
+    min_rank = int(nonzero[0].item()) + 1
+    max_rank = int(nonzero[-1].item()) + 1
+    count_text = ",".join(
+        f"{rank}:{int(count)}"
+        for rank, count in enumerate(counts.tolist(), start=1)
+    )
+
+    return (
+        f" | neighbor_k={neighbor_k} | "
+        f"neighbor_rank={min_rank}-{max_rank} mean={mean_rank:.2f} | "
+        f"rank_counts={count_text}"
+    )
+
+
 def save_metrics_csv(metrics: list[dict], output_path: Path) -> None:
     """Save epoch-level metrics."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -726,6 +759,10 @@ def run_experiment(config: ExperimentConfig) -> None:
         effective_mix_prob = config.mix_prob
         if config.augmentation == "simmixup" and epoch <= config.mix_warmup_epochs:
             effective_mix_prob = 0.0
+        neighbor_rank_summary = format_neighbor_rank_summary(
+            train_dataset=train_dataset,
+            effective_mix_prob=effective_mix_prob,
+        )
 
         train_loss, train_acc = train_one_epoch(
             model=model,
@@ -778,7 +815,8 @@ def run_experiment(config: ExperimentConfig) -> None:
             f"train_loss={train_loss:.4f} | "
             f"train_acc={train_acc:.4f} | "
             f"val_loss={val_loss:.4f} | "
-            f"val_acc={val_acc:.4f}{marker}"
+            f"val_acc={val_acc:.4f}"
+            f"{neighbor_rank_summary}{marker}"
         )
 
     save_metrics_csv(metrics, metrics_path)
