@@ -95,6 +95,10 @@ class ExperimentConfig:
     pair_sampling: str
     mix_prob: float
     mix_warmup_epochs: int
+    anchor_score_path: str | None
+    anchor_selection: str
+    anchor_top_pct: float
+    anchor_score_power: float
 
 
 # -----------------------------------------------------------------------------
@@ -298,6 +302,88 @@ def load_neighbor_payload(
     return payload
 
 
+def load_anchor_mix_probabilities(
+    path: str | None,
+    train_indices: list[int] | tuple[int, ...],
+    selection: str,
+    top_pct: float,
+    score_power: float,
+    seed: int,
+) -> dict[int, float] | None:
+    """Load anchor scores and convert them into per-anchor mix probabilities."""
+    if path is None:
+        return None
+
+    if selection not in {"top_fraction", "score_probability", "random_fraction"}:
+        raise ValueError(f"Unsupported anchor selection: {selection}")
+    if not 0.0 <= top_pct <= 1.0:
+        raise ValueError("--anchor-top-pct must be in [0, 1]")
+    if score_power <= 0:
+        raise ValueError("--anchor-score-power must be positive")
+
+    score_path = Path(path)
+    if not score_path.exists():
+        raise FileNotFoundError(f"Missing anchor score file: {score_path}")
+
+    payload = torch.load(score_path, map_location="cpu")
+    required = {"original_indices", "score"}
+    missing = sorted(required.difference(payload))
+    if missing:
+        raise ValueError(f"Anchor score file is missing required keys: {missing}")
+
+    original_indices = torch.as_tensor(payload["original_indices"], dtype=torch.long)
+    scores = torch.as_tensor(payload["score"], dtype=torch.float32)
+    if original_indices.ndim != 1 or scores.ndim != 1:
+        raise ValueError("original_indices and score must be 1D tensors")
+    if original_indices.numel() != scores.numel():
+        raise ValueError("original_indices and score must have matching lengths")
+    if not torch.isfinite(scores).all():
+        raise ValueError("Anchor scores must be finite")
+
+    row_by_index = {int(index): row for row, index in enumerate(original_indices.tolist())}
+    missing_indices = [int(index) for index in train_indices if int(index) not in row_by_index]
+    if missing_indices:
+        raise ValueError(f"Anchor score file is missing train indices: {missing_indices[:10]}")
+
+    aligned_scores = torch.tensor(
+        [float(scores[row_by_index[int(index)]].item()) for index in train_indices],
+        dtype=torch.float32,
+    )
+    mix_probs = torch.zeros(len(train_indices), dtype=torch.float32)
+
+    if selection == "score_probability":
+        score_percentiles = rank_percentile(aligned_scores)
+        mix_probs = torch.clamp(score_percentiles.pow(float(score_power)), min=0.0, max=1.0)
+    else:
+        selected_count = int(math.ceil(len(train_indices) * top_pct))
+        if selected_count > 0:
+            if selection == "top_fraction":
+                selected_positions = torch.argsort(aligned_scores, descending=True)[:selected_count]
+            else:
+                generator = torch.Generator()
+                generator.manual_seed(int(seed))
+                selected_positions = torch.randperm(len(train_indices), generator=generator)[:selected_count]
+            mix_probs[selected_positions] = 1.0
+
+    return {
+        int(index): float(prob)
+        for index, prob in zip(train_indices, mix_probs.tolist())
+    }
+
+
+def rank_percentile(values: torch.Tensor) -> torch.Tensor:
+    """Return simple rank percentiles in [0, 1] for a 1D tensor."""
+    if values.ndim != 1:
+        raise ValueError(f"rank_percentile expects a 1D tensor, got {tuple(values.shape)}")
+    if values.numel() == 1:
+        return torch.ones_like(values, dtype=torch.float32)
+
+    order = torch.argsort(values)
+    ranks = torch.empty(values.numel(), dtype=torch.float32)
+    ranks[order] = torch.arange(values.numel(), dtype=torch.float32)
+    return ranks / float(values.numel() - 1)
+
+
 
 def build_dataloaders(
     config: ExperimentConfig,
@@ -355,6 +441,14 @@ def build_dataloaders(
             neighbor_k=config.neighbor_k,
             neighbor_rank_start=config.neighbor_rank_start,
         )
+        anchor_mix_probs = load_anchor_mix_probabilities(
+            path=config.anchor_score_path,
+            train_indices=train_indices,
+            selection=config.anchor_selection,
+            top_pct=config.anchor_top_pct,
+            score_power=config.anchor_score_power,
+            seed=config.train_seed,
+        )
         train_dataset = GuidedPairDataset(
             base_dataset=train_full,
             train_indices=train_indices,
@@ -362,6 +456,7 @@ def build_dataloaders(
             pair_sampling=config.pair_sampling,
             mode=config.guided_mode,
             seed=config.train_seed,
+            anchor_mix_probs=anchor_mix_probs,
         )
     else:
         train_dataset = Subset(train_full, train_indices)
@@ -448,11 +543,12 @@ def train_one_epoch(
 
         if augmentation == "simcutmix":
 
-            images_i, targets_i, images_j, targets_j, *_ = batch
+            images_i, targets_i, images_j, targets_j, *extra = batch
             images_i = images_i.to(device)
             targets_i = targets_i.to(device)
             images_j = images_j.to(device)
             targets_j = targets_j.to(device)
+            anchor_mix_prob = extra[2].to(device) if len(extra) >= 3 else None
 
             images, targets_a, targets_b, lam = apply_simcutmix(
                 images_i=images_i,
@@ -461,6 +557,7 @@ def train_one_epoch(
                 targets_j=targets_j,
                 alpha=mixup_alpha,
                 mix_prob=mix_prob,
+                sample_mix_prob=anchor_mix_prob,
                 rng=augmentation_rng,
             )
 
@@ -489,11 +586,12 @@ def train_one_epoch(
 
         elif augmentation == "simmixup":
 
-            images_i, targets_i, images_j, targets_j, *_ = batch
+            images_i, targets_i, images_j, targets_j, *extra = batch
             images_i = images_i.to(device)
             targets_i = targets_i.to(device)
             images_j = images_j.to(device)
             targets_j = targets_j.to(device)
+            anchor_mix_prob = extra[2].to(device) if len(extra) >= 3 else None
 
             images, targets_a, targets_b, lam = apply_simmixup(
                 images_i=images_i,
@@ -502,6 +600,7 @@ def train_one_epoch(
                 targets_j=targets_j,
                 alpha=mixup_alpha,
                 mix_prob=mix_prob,
+                sample_mix_prob=anchor_mix_prob,
                 rng=augmentation_rng,
             )
 
@@ -664,12 +763,21 @@ def experiment_name(config: ExperimentConfig) -> str:
     neighbor_source = filename_component(
         Path(config.neighbor_path).stem if config.neighbor_path else "no_neighbor_file"
     )
+    anchor_part = ""
+    if config.anchor_score_path is not None:
+        anchor_source = filename_component(Path(config.anchor_score_path).stem)
+        top_pct = format_float_for_filename(config.anchor_top_pct)
+        score_power = format_float_for_filename(config.anchor_score_power)
+        anchor_part = (
+            f"_anchor_{anchor_source}_{config.anchor_selection}_"
+            f"top{top_pct}_pow{score_power}"
+        )
     return (
         f"{base_name}_{config.guided_mode}_"
         f"{neighbor_source}_"
         f"nk{config.neighbor_k}_r{rank_start}-{rank_end}_{config.pair_sampling}_"
         f"alpha{alpha}_mp{mix_prob}_warm{config.mix_warmup_epochs}_"
-        f"epochs{config.epochs}"
+        f"epochs{config.epochs}{anchor_part}"
     )
 
 
@@ -730,6 +838,22 @@ def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) 
         f"neighbor_rank_window={rank_start}-{rank_end} | "
         f"sampled_rank={min_rank}-{max_rank} mean={mean_rank:.2f} | "
         f"rank_counts={count_text}"
+    )
+
+
+def format_anchor_mix_summary(train_dataset: Any, effective_mix_prob: float) -> str:
+    """Format score-gated anchor mix coverage for epoch logging."""
+    anchor_probs = getattr(train_dataset, "anchor_mix_probs", None)
+    if anchor_probs is None:
+        return ""
+
+    effective_probs = anchor_probs.float() * float(effective_mix_prob)
+    active_count = int((effective_probs > 0).sum().item())
+    mean_prob = float(effective_probs.mean().item())
+    max_prob = float(effective_probs.max().item()) if effective_probs.numel() else 0.0
+    return (
+        f" | anchor_mix={active_count}/{effective_probs.numel()} "
+        f"mean_prob={mean_prob:.3f} max_prob={max_prob:.3f}"
     )
 
 
@@ -826,6 +950,10 @@ def run_experiment(config: ExperimentConfig) -> None:
             train_dataset=train_dataset,
             effective_mix_prob=effective_mix_prob,
         )
+        anchor_mix_summary = format_anchor_mix_summary(
+            train_dataset=train_dataset,
+            effective_mix_prob=effective_mix_prob,
+        )
 
         train_loss, train_acc = train_one_epoch(
             model=model,
@@ -879,7 +1007,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             f"train_acc={train_acc:.4f} | "
             f"val_loss={val_loss:.4f} | "
             f"val_acc={val_acc:.4f}"
-            f"{neighbor_rank_summary}{marker}"
+            f"{neighbor_rank_summary}{anchor_mix_summary}{marker}"
         )
 
     save_metrics_csv(metrics, metrics_path)
@@ -1002,6 +1130,31 @@ def parse_args() -> ExperimentConfig:
         default=0,
         help="Disable SimMixUp for the first N epochs.",
     )
+    parser.add_argument(
+        "--anchor-score-path",
+        type=str,
+        default=None,
+        help="Optional score payload for targeted SimMixUp/SimCutMix anchors.",
+    )
+    parser.add_argument(
+        "--anchor-selection",
+        type=str,
+        default="top_fraction",
+        choices=["top_fraction", "score_probability", "random_fraction"],
+        help="How to convert anchor scores into per-anchor mix probabilities.",
+    )
+    parser.add_argument(
+        "--anchor-top-pct",
+        type=float,
+        default=0.2,
+        help="Fraction of anchors selected when using top_fraction or random_fraction.",
+    )
+    parser.add_argument(
+        "--anchor-score-power",
+        type=float,
+        default=1.0,
+        help="Exponent for score_probability anchor mixing.",
+    )
 
     args = parser.parse_args()
 
@@ -1028,6 +1181,10 @@ def parse_args() -> ExperimentConfig:
         pair_sampling=args.pair_sampling,
         mix_prob=args.mix_prob,
         mix_warmup_epochs=args.mix_warmup_epochs,
+        anchor_score_path=args.anchor_score_path,
+        anchor_selection=args.anchor_selection,
+        anchor_top_pct=args.anchor_top_pct,
+        anchor_score_power=args.anchor_score_power,
     )
 
 
