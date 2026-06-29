@@ -17,9 +17,9 @@
   "validation_overlap_count": 0,
   "neighbors": {
     "class_agnostic": {
-      "path": "results\\experiments_v2\\neighbors\\cifar100\\k100_seed0\\neighbors_class_agnostic_K20.pt",
-      "requested_max_neighbors": 20,
-      "num_neighbors": 20
+      "path": "results\\experiments_v2\\neighbors\\cifar100\\k100_seed0\\neighbors_class_agnostic_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40
     }
   }
 }
