@@ -46,6 +46,7 @@ class GuidedPairDataset(Dataset):
         pair_sampling: PairSampling = "uniform",
         mode: NeighborMode = "class_aware",
         seed: int = 0,
+        anchor_mix_probs: dict[int, float] | None = None,
     ):
         if pair_sampling not in {"uniform", "weighted"}:
             raise ValueError(f"Unsupported pair_sampling: {pair_sampling}")
@@ -59,6 +60,7 @@ class GuidedPairDataset(Dataset):
         self.mode = mode
         self.seed = int(seed)
         self.epoch = 0
+        self.anchor_mix_probs = self._build_anchor_mix_prob_tensor(anchor_mix_probs)
 
         payload = _load_neighbor_index(neighbor_index)
         payload_mode = payload.get("mode")
@@ -144,7 +146,11 @@ class GuidedPairDataset(Dataset):
                 f"{label_i} != {label_j}"
             )
 
-        return image_i, label_i, image_j, label_j, idx_i, idx_j
+        if self.anchor_mix_probs is None:
+            return image_i, label_i, image_j, label_j, idx_i, idx_j
+
+        mix_prob = float(self.anchor_mix_probs[position].item())
+        return image_i, label_i, image_j, label_j, idx_i, idx_j, mix_prob
 
     def _sample_neighbor_slot(self, position: int, row: int) -> int:
         generator = torch.Generator()
@@ -158,6 +164,28 @@ class GuidedPairDataset(Dataset):
 
     def _sample_seed(self, position: int) -> int:
         return (self.seed + 1_000_003 * int(self.epoch) + 97_003 * int(position)) % (2**63 - 1)
+
+    def _build_anchor_mix_prob_tensor(
+        self,
+        anchor_mix_probs: dict[int, float] | None,
+    ) -> torch.Tensor | None:
+        if anchor_mix_probs is None:
+            return None
+
+        missing = [index for index in self.train_indices if index not in anchor_mix_probs]
+        if missing:
+            raise ValueError(f"Anchor score file is missing train indices: {missing[:10]}")
+
+        values = torch.tensor(
+            [float(anchor_mix_probs[index]) for index in self.train_indices],
+            dtype=torch.float32,
+        )
+        if not torch.isfinite(values).all():
+            raise ValueError("Anchor mix probabilities must be finite")
+        if bool((values < 0).any().item()) or bool((values > 1).any().item()):
+            raise ValueError("Anchor mix probabilities must be in [0, 1]")
+
+        return values
 
 
 def _load_neighbor_index(neighbor_index: dict[str, Any] | str | Path) -> dict[str, Any]:
