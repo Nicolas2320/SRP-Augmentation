@@ -213,6 +213,33 @@ class IndexedDatasetTests(unittest.TestCase):
         self.assertEqual(int(counts.sum().item()), len(self.train_indices))
         self.assertTrue(torch.all(counts >= 0))
 
+    def test_guided_pair_dataset_returns_anchor_mix_probability_when_configured(self):
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            self.train_indices,
+            class_aware_neighbors(),
+            mode="class_aware",
+            seed=0,
+            anchor_mix_probs={10: 1.0, 11: 0.0, 12: 0.5, 20: 1.0, 21: 0.0, 22: 0.5},
+        )
+
+        row = dataset[2]
+
+        self.assertEqual(len(row), 7)
+        self.assertEqual(row[4], 12)
+        self.assertEqual(row[6], 0.5)
+
+    def test_guided_pair_dataset_rejects_missing_anchor_mix_probability(self):
+        with self.assertRaises(ValueError):
+            GuidedPairDataset(
+                self.base_dataset,
+                self.train_indices,
+                class_aware_neighbors(),
+                mode="class_aware",
+                seed=0,
+                anchor_mix_probs={10: 1.0},
+            )
+
 
 class ExistingTrainingShapeTests(unittest.TestCase):
     def test_existing_augmentation_modes_still_train_on_two_item_batches(self):

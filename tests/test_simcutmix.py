@@ -149,6 +149,24 @@ class SimCutMixTests(unittest.TestCase):
 
         self.assertEqual(lam, expected_lam)
 
+    def test_sample_mix_probability_selects_individual_rows(self):
+        mixed, _, _, lam = apply_simcutmix(
+            self.images_i,
+            self.targets_i,
+            self.images_j,
+            self.targets_j,
+            sample_mix_prob=torch.tensor([1.0, 0.0, 1.0]),
+            rng=FixedRng(lam=0.25, integers=(4, 4)),
+        )
+
+        self.assertTrue(torch.is_tensor(lam))
+        self.assertLess(float(lam[0].item()), 1.0)
+        self.assertEqual(float(lam[1].item()), 1.0)
+        self.assertLess(float(lam[2].item()), 1.0)
+        self.assertGreater(int((mixed[0] != self.images_i[0]).sum().item()), 0)
+        self.assertEqual(int((mixed[1] != self.images_i[1]).sum().item()), 0)
+        self.assertGreater(int((mixed[2] != self.images_i[2]).sum().item()), 0)
+
     def test_labels_match_selected_neighbor_pairs(self):
         _, targets_i, targets_j, _ = apply_simcutmix(
             self.images_i,
@@ -292,6 +310,10 @@ class SimCutMixTests(unittest.TestCase):
             pair_sampling="uniform",
             mix_prob=1.0,
             mix_warmup_epochs=0,
+            anchor_score_path=None,
+            anchor_selection="top_fraction",
+            anchor_top_pct=0.2,
+            anchor_score_power=1.0,
         )
         class_aware = ExperimentConfig(**base)
         class_agnostic = ExperimentConfig(**{**base, "guided_mode": "class_agnostic"})
