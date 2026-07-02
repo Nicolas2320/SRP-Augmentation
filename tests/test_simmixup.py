@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -14,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from src.augmentations.similarity_guided import apply_simmixup, simmixup_criterion
 from src.train import (
+    EMA,
     ExperimentConfig,
     experiment_name,
     load_anchor_mix_probabilities,
@@ -240,6 +242,17 @@ class SimMixUpTests(unittest.TestCase):
         self.assertTrue(np.isfinite(loss))
         self.assertGreaterEqual(accuracy, 0.0)
         self.assertLessEqual(accuracy, 1.0)
+
+    def test_ema_updates_model_weights(self):
+        model = TinyClassifier()
+        ema = EMA(model, decay=0.5)
+        with torch.no_grad():
+            model.net[1].weight.copy_(torch.ones_like(model.net[1].weight) * 2.0)
+            model.net[1].bias.copy_(torch.ones_like(model.net[1].bias) * 3.0)
+        ema.update(model)
+
+        self.assertTrue(torch.allclose(ema.shadow["net.1.weight"], torch.ones_like(model.net[1].weight) * 1.0))
+        self.assertTrue(torch.allclose(ema.shadow["net.1.bias"], torch.ones_like(model.net[1].bias) * 1.5))
 
     def test_experiment_name_separates_simmixup_variants(self):
         base = dict(

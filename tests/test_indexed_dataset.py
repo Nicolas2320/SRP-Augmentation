@@ -240,6 +240,52 @@ class IndexedDatasetTests(unittest.TestCase):
                 anchor_mix_probs={10: 1.0},
             )
 
+    def test_dynamic_neighbor_pool_uses_smaller_pool_for_easy_samples(self):
+        payload = {
+            "mode": "class_aware",
+            "original_indices": torch.tensor([10, 11, 12]),
+            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
+            "similarities": torch.tensor([[0.95, 0.82, 0.74, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05]]),
+        }
+
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            [10],
+            payload,
+            mode="class_aware",
+            seed=0,
+            pair_sampling="weighted",
+            dynamic_neighbor_pool=True,
+            easy_neighbor_pool_size=3,
+            hard_neighbor_pool_size=6,
+            difficulty_threshold=0.8,
+        )
+
+        self.assertLess(dataset._sample_neighbor_slot(0, 0), 3)
+
+    def test_dynamic_neighbor_pool_uses_larger_pool_for_hard_samples(self):
+        payload = {
+            "mode": "class_aware",
+            "original_indices": torch.tensor([10, 11, 12]),
+            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
+            "similarities": torch.tensor([[0.35, 0.32, 0.30, 0.28, 0.25, 0.20, 0.18, 0.15, 0.10, 0.05]]),
+        }
+
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            [10],
+            payload,
+            mode="class_aware",
+            seed=0,
+            pair_sampling="weighted",
+            dynamic_neighbor_pool=True,
+            easy_neighbor_pool_size=3,
+            hard_neighbor_pool_size=6,
+            difficulty_threshold=0.8,
+        )
+
+        self.assertLess(dataset._sample_neighbor_slot(0, 0), 6)
+
 
 class ExistingTrainingShapeTests(unittest.TestCase):
     def test_existing_augmentation_modes_still_train_on_two_item_batches(self):

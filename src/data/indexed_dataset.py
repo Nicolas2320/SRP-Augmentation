@@ -47,6 +47,11 @@ class GuidedPairDataset(Dataset):
         mode: NeighborMode = "class_aware",
         seed: int = 0,
         anchor_mix_probs: dict[int, float] | None = None,
+        dynamic_neighbor_pool: bool = False,
+        easy_neighbor_pool_size: int = 3,
+        hard_neighbor_pool_size: int = 10,
+        difficulty_threshold: float = 0.8,
+        top_rank_only: bool = False,
     ):
         if pair_sampling not in {"uniform", "weighted"}:
             raise ValueError(f"Unsupported pair_sampling: {pair_sampling}")
@@ -61,6 +66,11 @@ class GuidedPairDataset(Dataset):
         self.seed = int(seed)
         self.epoch = 0
         self.anchor_mix_probs = self._build_anchor_mix_prob_tensor(anchor_mix_probs)
+        self.dynamic_neighbor_pool = bool(dynamic_neighbor_pool)
+        self.easy_neighbor_pool_size = max(1, int(easy_neighbor_pool_size))
+        self.hard_neighbor_pool_size = max(1, int(hard_neighbor_pool_size))
+        self.difficulty_threshold = float(difficulty_threshold)
+        self.top_rank_only = bool(top_rank_only)
 
         payload = _load_neighbor_index(neighbor_index)
         payload_mode = payload.get("mode")
@@ -107,6 +117,9 @@ class GuidedPairDataset(Dataset):
             self.weights = torch.softmax(similarities, dim=1)
         else:
             self.weights = None
+
+        if self.dynamic_neighbor_pool:
+            self._validate_neighbor_pool_settings()
 
     def __len__(self) -> int:
         return len(self.train_indices)
@@ -157,10 +170,47 @@ class GuidedPairDataset(Dataset):
         generator.manual_seed(self._sample_seed(position))
 
         num_neighbors = int(self.neighbor_indices.shape[1])
-        if self.weights is None:
-            return int(torch.randint(num_neighbors, size=(1,), generator=generator).item())
+        if self.top_rank_only:
+            return 0
 
-        return int(torch.multinomial(self.weights[row], num_samples=1, generator=generator).item())
+        if not self.dynamic_neighbor_pool:
+            if self.weights is None:
+                return int(torch.randint(num_neighbors, size=(1,), generator=generator).item())
+            return int(torch.multinomial(self.weights[row], num_samples=1, generator=generator).item())
+
+        pool_size = self._get_neighbor_pool_size(row)
+        if pool_size > num_neighbors:
+            pool_size = num_neighbors
+        if pool_size <= 0:
+            pool_size = 1
+
+        if self.weights is None:
+            return int(torch.randint(pool_size, size=(1,), generator=generator).item())
+
+        if self.weights.dtype != torch.float32:
+            weights = self.weights[row].float()
+        else:
+            weights = self.weights[row]
+        pool_weights = weights[:pool_size]
+        pool_weights = pool_weights / pool_weights.sum().clamp_min(1e-12)
+        return int(torch.multinomial(pool_weights, num_samples=1, generator=generator).item())
+
+    def _get_neighbor_pool_size(self, row: int) -> int:
+        if not self.dynamic_neighbor_pool:
+            return int(self.neighbor_indices.shape[1])
+
+        if self.weights is None:
+            return self.easy_neighbor_pool_size
+
+        row_weights = self.weights[row]
+        top_weight = float(row_weights[0].item()) if row_weights.numel() > 0 else 0.0
+        return self.easy_neighbor_pool_size if top_weight >= self.difficulty_threshold else self.hard_neighbor_pool_size
+
+    def _validate_neighbor_pool_settings(self) -> None:
+        if self.easy_neighbor_pool_size <= 0:
+            raise ValueError("easy_neighbor_pool_size must be positive")
+        if self.hard_neighbor_pool_size <= 0:
+            raise ValueError("hard_neighbor_pool_size must be positive")
 
     def _sample_seed(self, position: int) -> int:
         return (self.seed + 1_000_003 * int(self.epoch) + 97_003 * int(position)) % (2**63 - 1)
