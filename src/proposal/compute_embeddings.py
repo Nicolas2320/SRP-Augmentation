@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import CIFAR10, CIFAR100
-from torchvision.models import ResNet18_Weights, resnet18
+from torchvision.models import ResNet50_Weights, resnet50
 
 
 DATASET_CLASSES = {
@@ -74,15 +74,15 @@ def output_dir(output_root: Path, dataset: str, k: int, subset_seed: int) -> Pat
 
 
 def build_encoder(name: str, device: torch.device) -> tuple[nn.Module, Any, int]:
-    if name != "resnet18_imagenet":
+    if name != "resnet50_imagenet":
         raise ValueError(f"Unsupported encoder: {name}")
 
-    weights = ResNet18_Weights.DEFAULT
-    model = resnet18(weights=weights)
+    weights = ResNet50_Weights.DEFAULT
+    model = resnet50(weights=weights)
     feature_extractor = nn.Sequential(*list(model.children())[:-1])
     feature_extractor.eval()
     feature_extractor.to(device)
-    return feature_extractor, weights.transforms(), 512
+    return feature_extractor, weights.transforms(), 2048
 
 
 def get_device(requested: str) -> torch.device:
@@ -126,7 +126,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
-    parser.add_argument("--encoder", choices=["resnet18_imagenet"], required=True)
+    parser.add_argument("--encoder", choices=["resnet50_imagenet"], required=True)
     parser.add_argument("--split-root", type=str, default="data/splits")
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--output-root", type=str, default="results/neighbors")
