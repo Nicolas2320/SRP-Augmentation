@@ -1093,7 +1093,7 @@ def parse_args() -> ExperimentConfig:
         "--guided-mode",
         type=str,
         default="class_aware",
-        choices=["class_aware", "class_agnostic"],
+        choices=["class_aware", "class_agnostic", "different_label"],
         help="Neighbor mode expected in --neighbor-path.",
     )
     parser.add_argument(

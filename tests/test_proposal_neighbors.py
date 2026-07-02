@@ -73,10 +73,26 @@ class ProposalNeighborTests(unittest.TestCase):
         self.assertTrue((payload["similarities"][:, :-1] >= payload["similarities"][:, 1:]).all())
         validate_neighbors(payload, "class_agnostic")
 
+    def test_different_label_neighbors_exclude_same_label_pairs(self):
+        payload = build_neighbors(
+            self.embeddings,
+            self.labels,
+            self.indices,
+            mode="different_label",
+            max_neighbors=5,
+        )
+
+        self.assertEqual(payload["num_neighbors"], 3)
+        self.assertTrue((payload["neighbor_labels"] != self.labels[:, None]).all())
+        self.assertFalse((payload["neighbor_indices"] == self.indices[:, None]).any())
+        self.assertTrue((payload["similarities"][:, :-1] >= payload["similarities"][:, 1:]).all())
+        validate_neighbors(payload, "different_label")
+
     def test_class_aware_neighbor_count_is_capped_at_k_minus_one(self):
         self.assertEqual(effective_neighbor_count(self.labels, "class_aware", 10), 2)
         self.assertEqual(effective_neighbor_count(self.labels, "class_aware", 1), 1)
         self.assertEqual(effective_neighbor_count(self.labels, "class_agnostic", 10), 5)
+        self.assertEqual(effective_neighbor_count(self.labels, "different_label", 10), 3)
 
     def test_embedding_validation_checks_split_and_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
