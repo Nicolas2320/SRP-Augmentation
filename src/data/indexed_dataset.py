@@ -113,6 +113,21 @@ class GuidedPairDataset(Dataset):
 
         self.epoch = int(epoch)
 
+    def sampled_neighbor_rank_counts(self) -> torch.Tensor:
+        """Count selected neighbor ranks for the current epoch.
+
+        Counts are zero-indexed internally: element 0 is the nearest neighbor,
+        element 1 is the second nearest neighbor, and so on.
+        """
+
+        num_neighbors = int(self.neighbor_indices.shape[1])
+        counts = torch.zeros(num_neighbors, dtype=torch.long)
+        for position, idx_i in enumerate(self.train_indices):
+            row = self.row_by_global_index[idx_i]
+            neighbor_slot = self._sample_neighbor_slot(position, row)
+            counts[neighbor_slot] += 1
+        return counts
+
     def __getitem__(self, position: int):
         idx_i = self.train_indices[position]
         row = self.row_by_global_index[idx_i]
