@@ -1,0 +1,25 @@
+{
+  "dataset": "cifar100",
+  "k": 50,
+  "subset_seed": 0,
+  "encoder": "resnet50_imagenet",
+  "split_hash": "03499fd19585a20cd3a2cf6b26ff08c9f805a44d45c943e2435fd5fee86317c7",
+  "validation_split_hash": "001490b0edd6d867e340311654912ce4eaa33d81587b43cdce26b441a51449a8",
+  "train_indices_hash": "8eeafc15c969a24ab8b2dd0b49a42c389f830a1bbd1920662eadac02d601d6e9",
+  "split_path": "data\\splits\\cifar100\\k50_seed0.json",
+  "validation_split_path": "data\\splits\\cifar100\\fixed_validation_split.json",
+  "embedding_path": "results\\final_stage\\neighbors\\cifar100\\k50_seed0\\embeddings_resnet50_imagenet.pt",
+  "num_train": 5000,
+  "embedding_dim": 2048,
+  "source_dataset_partition": "torchvision_train_true",
+  "uses_validation_samples": false,
+  "uses_test_samples": false,
+  "validation_overlap_count": 0,
+  "neighbors": {
+    "class_agnostic": {
+      "path": "results\\final_stage\\neighbors\\cifar100\\k50_seed0\\neighbors_class_agnostic_K60.pt",
+      "requested_max_neighbors": 60,
+      "num_neighbors": 60
+    }
+  }
+}
