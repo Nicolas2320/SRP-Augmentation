@@ -78,9 +78,10 @@ SRP-Augmentation/
 |-- results/
 |   `-- experiments/            # Central experiment outputs and manifest
 |       |-- manifest.csv         # Index of local experiment summaries
-|       |-- baseline_100e/       # 100-epoch baseline metrics
-|       |-- final_stage_v1/      # Current focused comparison runs
-|       `-- shared/              # Shared checkpoints, neighbors, figures
+|       |-- cifar100/            # dataset/model/k/method experiment runs
+|       |   |-- resnet50/
+|       |   `-- vit/
+|       `-- shared/              # Shared neighbors, anchor scores, figures
 |
 |-- src/
 |   |-- augmentations/

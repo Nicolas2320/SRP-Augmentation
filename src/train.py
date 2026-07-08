@@ -36,6 +36,7 @@ import csv
 import json
 import math
 import random
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -799,6 +800,65 @@ def filename_component(value: str) -> str:
     return "".join(safe_chars)
 
 
+def neighbor_source_k_from_path(neighbor_path: str | None, fallback: int) -> str:
+    """Extract the source neighbor K from a payload filename."""
+    if neighbor_path:
+        match = re.search(r"_K(\d+)", Path(neighbor_path).stem)
+        if match:
+            return match.group(1)
+    return str(fallback)
+
+
+def guided_output_parts(config: ExperimentConfig) -> list[str]:
+    """Build canonical folder components for guided augmentation settings."""
+    rank_start = int(config.neighbor_rank_start)
+    rank_end = rank_start + int(config.neighbor_k) - 1
+    source_k = neighbor_source_k_from_path(config.neighbor_path, config.neighbor_k)
+    alpha = format_float_for_filename(config.mixup_alpha)
+    mix_prob = format_float_for_filename(config.mix_prob)
+
+    parts = [
+        f"{filename_component(config.guided_mode)}_K{source_k}",
+        f"r{rank_start}-{rank_end}",
+        (
+            f"{filename_component(config.pair_sampling)}_"
+            f"nk{config.neighbor_k}_a{alpha}_"
+            f"mp{mix_prob}_w{config.mix_warmup_epochs}"
+        ),
+    ]
+    if config.anchor_score_path is not None:
+        top_pct = format_float_for_filename(config.anchor_top_pct)
+        score_power = format_float_for_filename(config.anchor_score_power)
+        parts.append(
+            f"{filename_component(config.anchor_selection)}_"
+            f"top{top_pct}_pow{score_power}"
+        )
+    return parts
+
+
+def experiment_output_dir(config: ExperimentConfig) -> Path:
+    """Return the canonical folder for one experiment run."""
+    base = (
+        Path(config.output_root)
+        / filename_component(config.dataset)
+        / filename_component(config.model)
+        / f"k{config.k}"
+    )
+    run = f"e{config.epochs}_s{config.subset_seed}_t{config.train_seed}"
+
+    if config.augmentation in {"none", "mixup", "cutmix", "augmix"}:
+        return base / "baselines" / filename_component(config.augmentation) / run
+
+    if config.augmentation == "simmixup":
+        group = "anchor_gated" if config.anchor_score_path is not None else "ungated"
+        return base / "simmixup" / group / Path(*guided_output_parts(config)) / run
+
+    if config.augmentation == "simcutmix":
+        return base / "simcutmix" / Path(*guided_output_parts(config)) / run
+
+    return base / filename_component(config.augmentation) / run
+
+
 def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) -> str:
     """Format sampled SimMixUp neighbor-rank counts for epoch logging."""
 
@@ -895,11 +955,11 @@ def run_experiment(config: ExperimentConfig) -> None:
     device = get_device()
 
     name = experiment_name(config)
-    output_root = Path(config.output_root)
+    output_root = experiment_output_dir(config)
 
-    metrics_path = output_root / "metrics" / f"{name}.csv"
-    summary_path = output_root / "metrics" / f"{name}_summary.json"
-    checkpoint_path = output_root / "checkpoints" / f"{name}_best.pt"
+    metrics_path = output_root / "metrics.csv"
+    summary_path = output_root / "summary.json"
+    checkpoint_path = output_root / "checkpoint_best.pt"
 
     print("Experiment configuration:")
     for key, value in asdict(config).items():
@@ -1070,7 +1130,12 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument("--train-seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
-    parser.add_argument("--output-root", type=str, default="results/experiments/manual_runs")
+    parser.add_argument(
+        "--output-root",
+        type=str,
+        default="results/experiments",
+        help="Base folder for canonical experiment outputs.",
+    )
     parser.add_argument( # this is just for mixup
         "--mixup-alpha",
         type=float,

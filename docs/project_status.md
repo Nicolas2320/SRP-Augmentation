@@ -16,7 +16,7 @@ Implemented pieces:
 - Proposed variants: SimMixUp and SimCutMix.
 - Similarity-guided pairing with class-aware/class-agnostic neighbors, rank
   windows, mix probability, warmup, and anchor-score gating.
-- Centralized experiment outputs under `results/experiments/`.
+- Canonical experiment outputs under `results/experiments/<dataset>/<model>/k<k>/<method>/...`.
 
 ## Canonical References
 
@@ -32,9 +32,10 @@ clean.
 
 ## Current Evidence
 
-The local experiment catalog contains 55 complete summary/CSV metric pairs. Most
-results are CIFAR-100 with `subset_seed=0` and `train_seed=0`, so they are still
-preliminary single-seed evidence.
+The local experiment catalog contains 53 complete summary/CSV metric pairs after
+deduplicating two equivalent reruns. Three non-exact reruns are preserved
+under `legacy/` for provenance. Most results are CIFAR-100 with `subset_seed=0`
+and `train_seed=0`, so they are still preliminary single-seed evidence.
 
 Main observations:
 
@@ -50,20 +51,21 @@ Main observations:
 
 ## Known Gaps
 
-- The final-stage k=20 comparison is incomplete locally: MixUp and CutMix
+- The k=20 same-budget comparison is incomplete locally: MixUp and CutMix
   summary/CSV files are missing, and SimCutMix k=20 currently exists only as a
   teammate-provided summary.
-- The k=50 MixUp result needs reconciliation: the local summary reports
-  `24.08%` test accuracy, while the teammate-provided result for the same path
-  reports `25.16%`.
-- Some historical summaries reference checkpoint or neighbor artifacts that are
-  not present locally. The metric CSV/JSON pairs are present, but exact
-  checkpoint restoration is incomplete for those historical runs.
+- The k=50 MixUp result needs reconciliation: the local canonical summary
+  reports `24.08%` test accuracy, while the teammate-provided result reports
+  `25.16%`.
+- Eight historical summaries reference checkpoints that are not present locally,
+  and one class-aware SimMixUp summary references a missing K20 neighbor file.
+  The metric CSV/JSON pairs are present, but exact restoration is incomplete for
+  those historical runs.
 - Multi-seed aggregation is still missing.
 
 ## Next Tasks
 
-1. Add or rerun the missing k=20 final-stage MixUp, CutMix, and SimCutMix runs.
+1. Add or rerun the missing k=20 same-budget MixUp, CutMix, and SimCutMix runs.
 2. Reconcile the k=50 MixUp discrepancy and decide which result is authoritative.
 3. Build final same-budget tables for k=20, k=50, and k=100.
 4. Run multi-seed aggregation for the final selected settings.

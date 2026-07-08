@@ -46,11 +46,20 @@ MANIFEST_COLUMNS = [
 ]
 
 
+def iter_summary_paths(results_root: Path) -> list[Path]:
+    """Find both canonical and legacy experiment summary files."""
+    paths = set(results_root.rglob("*_summary.json"))
+    paths.update(results_root.rglob("summary.json"))
+    return sorted(paths)
+
+
 def collection_name(path: Path, results_root: Path) -> str:
     rel = path.relative_to(results_root)
     parts = rel.parts
-    if len(parts) >= 3 and parts[0] == "experiments":
-        return parts[1]
+    if len(parts) >= 6 and parts[0] == "experiments":
+        if parts[4] == "legacy" and len(parts) >= 7:
+            return "/".join(parts[1:6])
+        return "/".join(parts[1:5])
     if len(parts) >= 2 and parts[0].startswith("experiments_"):
         return parts[0]
     if len(parts) >= 2 and parts[0] == "final_stage":
@@ -126,13 +135,24 @@ def resolve_metrics_path(summary_path: Path, summary: dict[str, Any], repo_root:
         candidate = repo_root / str(metrics_path).replace("\\", "/")
         if candidate.exists():
             return candidate
+    if summary_path.name == "summary.json":
+        return summary_path.with_name("metrics.csv")
     return summary_path.with_name(summary_path.name.replace("_summary.json", ".csv"))
+
+
+def experiment_id(summary_path: Path, results_root: Path) -> str:
+    if summary_path.name == "summary.json":
+        rel = summary_path.parent.relative_to(results_root)
+        if rel.parts and rel.parts[0] == "experiments":
+            rel = Path(*rel.parts[1:])
+        return rel.as_posix()
+    return summary_path.name.removesuffix("_summary.json")
 
 
 def build_rows(results_root: Path, repo_root: Path) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
 
-    for summary_path in sorted(results_root.rglob("*_summary.json")):
+    for summary_path in iter_summary_paths(results_root):
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         metrics_path = resolve_metrics_path(summary_path, summary, repo_root)
         best_epoch = int(summary.get("best_epoch", 0))
@@ -142,12 +162,11 @@ def build_rows(results_root: Path, repo_root: Path) -> list[dict[str, str]]:
         val_acc = as_float(summary.get("best_val_acc"))
         gap = train_acc - val_acc if train_acc is not None and val_acc is not None else None
 
-        experiment_id = summary_path.name.removesuffix("_summary.json")
         is_guided = summary.get("augmentation") in {"simmixup", "simcutmix"}
         has_anchor = bool(summary.get("anchor_score_path"))
 
         row = {
-            "experiment_id": experiment_id,
+            "experiment_id": experiment_id(summary_path, results_root),
             "collection": collection_name(summary_path, results_root),
             "dataset": str(summary.get("dataset", "")),
             "model": str(summary.get("model", "")),

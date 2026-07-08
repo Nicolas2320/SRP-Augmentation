@@ -5,15 +5,14 @@ Generated: 2026-07-08
 Branch: `summary-v1`
 
 This note consolidates the experiment result files currently present under
-`results/experiments/`. It replaces earlier one-off notes and keeps each result
-source visible, because several nominally similar runs appear in more than one
-metrics folder.
+`results/experiments/`. It replaces earlier one-off notes and keeps non-exact
+reruns visible under `legacy/`.
 
 ## Scope and Method
 
-- Result sources: `*_summary.json` files plus their matching epoch-level CSV
-  files.
-- Complete metric pairs found: 55 summary JSON files and 55 matching CSV files.
+- Result sources: `summary.json` files plus their matching `metrics.csv` files.
+- Complete metric pairs found: 53 summary JSON files and 53 matching CSV files
+  after deduplicating two equivalent reruns.
 - Missing summary/CSV pairs: none.
 - Anchor-score support file found: 1 CSV under `results/experiments/shared/anchor_scores/`.
 - Reported `train_acc`, `train_loss`, and `val_loss` are taken from the CSV row
@@ -28,16 +27,18 @@ Important caveat: these are still single-seed results. They are good for
 preliminary direction finding, but not enough for final claims without multi-seed
 aggregation.
 
-## Experiment Folders
+## Experiment Layout
 
 | Folder | Role | Complete runs |
 |---|---|---:|
-| `results/experiments/baseline_100e/metrics` | Main 100-epoch baseline grid plus one early SimMixUp run | 25 |
-| `results/experiments/initial_simmixup_v2/metrics` | Initial 50-epoch ResNet50 k=100 baseline and SimMixUp runs | 4 |
-| `results/experiments/initial_simcutmix_v3/metrics` | Initial 50-epoch SimCutMix run | 1 |
-| `results/experiments/simmixup_ablation_v2/metrics` | Expanded 50-epoch SimMixUp ablations | 13 |
-| `results/experiments/anchor_gated_v3/metrics` | Anchor-gated 50-epoch SimMixUp sweep | 5 |
-| `results/experiments/final_stage_v1/metrics` | New same-budget CutMix, k=50 comparison, and SimCutMix ablations | 7 |
+| `results/experiments/cifar100/resnet50/k100/baselines` | ResNet50 k=100 baselines | 7 |
+| `results/experiments/cifar100/resnet50/k100/simmixup` | ResNet50 k=100 SimMixUp and anchor-gated runs | 17 |
+| `results/experiments/cifar100/resnet50/k100/simcutmix` | ResNet50 k=100 SimCutMix runs | 3 |
+| `results/experiments/cifar100/resnet50/k100/legacy` | Non-exact retained reruns | 3 |
+| `results/experiments/cifar100/resnet50/k20/baselines` | ResNet50 k=20 100-epoch baselines | 4 |
+| `results/experiments/cifar100/resnet50/k50/baselines` | ResNet50 k=50 baselines | 6 |
+| `results/experiments/cifar100/resnet50/k50/simcutmix` | ResNet50 k=50 SimCutMix run | 1 |
+| `results/experiments/cifar100/vit/*/baselines` | ViT baselines for k=20, 50, 100 | 12 |
 | `results/experiments/shared/anchor_scores` | Anchor uncertainty/rarity score CSV used for targeted mixing | 1 support file |
 
 ## Final-Stage Completion Check
@@ -48,14 +49,14 @@ SimCutMix ablation were completed. The k=20 comparison is still missing.
 
 | Planned experiment | Status | Evidence |
 |---|---|---|
-| k=100 CutMix, 50 epochs | complete | `results/experiments/final_stage_v1/metrics/cifar100_resnet50_k100_seed0_cutmix_epochs50_summary.json` |
+| k=100 CutMix, 50 epochs | complete | `results/experiments/cifar100/resnet50/k100/baselines/cutmix/e50_s0_t0/summary.json` |
 | k=100 SimCutMix K40 ranks 1-20 repeat | exact final-stage K40 file missing | K60 ranks 1-20 exists and has the same first 20 neighbors as the older K40 file, so it is effectively equivalent for this rank window |
-| k=20 MixUp, 50 epochs | missing | no `results/experiments/final_stage_v1/metrics/cifar100_resnet50_k20_seed0_mixup_epochs50_summary.json` |
-| k=20 CutMix, 50 epochs | missing | no `results/experiments/final_stage_v1/metrics/cifar100_resnet50_k20_seed0_cutmix_epochs50_summary.json` |
-| k=20 SimCutMix, 50 epochs | teammate summary only | teammate reports `18.14%` test accuracy, but no local summary JSON or CSV exists under `results/experiments/final_stage_v1/metrics` |
+| k=20 MixUp, 50 epochs | missing | no canonical `results/experiments/cifar100/resnet50/k20/baselines/mixup/e50_s0_t0/summary.json` |
+| k=20 CutMix, 50 epochs | missing | no canonical `results/experiments/cifar100/resnet50/k20/baselines/cutmix/e50_s0_t0/summary.json` |
+| k=20 SimCutMix, 50 epochs | teammate summary only | teammate reports `18.14%` test accuracy, but no local canonical summary/CSV exists |
 | k=50 MixUp, 50 epochs | complete, with discrepancy | local file reports `24.08%` test accuracy; teammate summary for the same path reports `25.16%` |
-| k=50 CutMix, 50 epochs | complete | `results/experiments/final_stage_v1/metrics/cifar100_resnet50_k50_seed0_cutmix_epochs50_summary.json` |
-| k=50 SimCutMix K60 ranks 1-20, 50 epochs | complete | `results/experiments/final_stage_v1/metrics/cifar100_resnet50_k50_seed0_simcutmix_class_agnostic_neighbors_class_agnostic_K60_nk20_r1-20_uniform_alpha1_mp1_warm0_epochs50_summary.json` |
+| k=50 CutMix, 50 epochs | complete | `results/experiments/cifar100/resnet50/k50/baselines/cutmix/e50_s0_t0/summary.json` |
+| k=50 SimCutMix K60 ranks 1-20, 50 epochs | complete | `results/experiments/cifar100/resnet50/k50/simcutmix/class_agnostic_K60/r1-20/uniform_nk20_a1_mp1_w0/e50_s0_t0/summary.json` |
 | k=100 SimCutMix K40 ranks 21-40 | complete | best current guided run, `40.02%` test accuracy |
 | k=100 SimCutMix K60 ranks 1-20 | complete | effectively repeats the K40 ranks 1-20 setup, `38.65%` test accuracy |
 | k=100 SimCutMix K60 ranks 21-40 | complete | `38.34%` test accuracy |
@@ -63,7 +64,7 @@ SimCutMix ablation were completed. The k=20 comparison is still missing.
 ## Teammate-Provided External Summaries
 
 These summaries were shared directly by a teammate and are not yet counted in
-the local `55` complete JSON/CSV metric pairs above. They are useful for
+the local `53` complete JSON/CSV metric pairs above. They are useful for
 orientation, but the local note should treat them as provisional until the
 matching summary JSON and CSV files are added or the local files are reconciled.
 
@@ -265,8 +266,8 @@ uses K60 class-agnostic neighbors, ranks 21-40, uniform sampling, alpha=1,
 mix_prob=1, and no warmup. It reaches `37.69%` test accuracy, which is better
 than 50-epoch MixUp but still below 100-epoch CutMix.
 
-Most SimMixUp variants are tightly clustered. In `results/experiments/simmixup_ablation_v2`, the
-11 SimMixUp ablations range from `35.47%` to `37.69%`, with a mean around
+Most SimMixUp variants are tightly clustered. In the canonical k=100 SimMixUp
+folders, the 11 ungated ablation runs range from `35.47%` to `37.69%`, with a mean around
 `36.35%`. This means changes to alpha, mix probability, warmup, and rank window
 did not create a consistently better recipe in the current single-seed setup.
 
@@ -320,7 +321,8 @@ current evidence says targeted anchor mixing is not helping in this form.
 
 ## Parameter Patterns in SimMixUp Ablations
 
-These summaries use the 11 SimMixUp runs under `results/experiments/simmixup_ablation_v2/metrics`.
+These summaries use the 11 canonical ungated SimMixUp ablation runs under
+`results/experiments/cifar100/resnet50/k100/simmixup/ungated/`.
 
 | Ablation grouping | n | Min test | Mean test | Max test | Read |
 |---|---:|---:|---:|---:|---|
