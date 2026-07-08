@@ -76,9 +76,11 @@ SRP-Augmentation/
 |-- notes/                      # Project notes and documentation
 |
 |-- results/
-|   |-- checkpoints/            # Best validation checkpoints, ignored by Git
-|   |-- figures/                # Generated plots, ignored by Git
-|   `-- metrics/                # CSV metrics and JSON summaries
+|   `-- experiments/            # Central experiment outputs and manifest
+|       |-- manifest.csv         # Index of local experiment summaries
+|       |-- baseline_100e/       # 100-epoch baseline metrics
+|       |-- final_stage_v1/      # Current focused comparison runs
+|       `-- shared/              # Shared checkpoints, neighbors, figures
 |
 |-- src/
 |   |-- augmentations/

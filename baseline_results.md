@@ -1,6 +1,6 @@
 # Baseline Results
 
-Current baseline experiments recorded under `results/metrics`.
+Current baseline experiments recorded under `results/experiments/baseline_100e/metrics`.
 
 - Git commit hash: `802f98ea02d440e40540249b46ed3266acb6f185`
 - Metrics source: `*_summary.json` files plus the matching epoch CSV files.

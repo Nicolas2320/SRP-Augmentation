@@ -93,19 +93,19 @@ Early interpretation:
 
 Important outputs already exist:
 
-- `results/metrics/`: main 100-epoch baseline summaries and first guided runs.
-- `results/metrics_v2/`: 50-epoch ResNet50 k=100 baseline and SimMixUp runs.
-- `results/metrics_v3/`: 50-epoch SimCutMix run.
-- `results/neighbors/cifar100/k100_seed0/`: ResNet50 ImageNet embeddings and
+- `results/experiments/baseline_100e/metrics/`: main 100-epoch baseline summaries and first guided runs.
+- `results/experiments/initial_simmixup_v2/metrics/`: 50-epoch ResNet50 k=100 baseline and SimMixUp runs.
+- `results/experiments/initial_simcutmix_v3/metrics/`: 50-epoch SimCutMix run.
+- `results/experiments/shared/neighbors/cifar100/k100_seed0/`: ResNet50 ImageNet embeddings and
   class-aware/class-agnostic K40 neighbor files for k=100.
-- `results/neighbors/cifar100/k20_seed0/`: ResNet18 ImageNet embeddings and
+- `results/experiments/shared/neighbors/cifar100/k20_seed0/`: ResNet18 ImageNet embeddings and
   class-aware neighbors for k=20, with 19 effective same-class neighbors.
-- `results/anchor_scores/cifar100/k100_seed0/`: uncertainty/rarity anchor scores
+- `results/experiments/shared/anchor_scores/cifar100/k100_seed0/`: uncertainty/rarity anchor scores
   for targeted guided augmentation.
 
 The neighbor payloads record split hashes and are built from the k-shot training
 subset. One reproducibility issue should be fixed: the
-`results/neighbors/cifar100/k100_seed0/metadata.json` file appears stale, because
+`results/experiments/shared/neighbors/cifar100/k100_seed0/metadata.json` file appears stale, because
 it points to ResNet18/K20 artifacts while the actual k=100 payloads are
 ResNet50/K40.
 

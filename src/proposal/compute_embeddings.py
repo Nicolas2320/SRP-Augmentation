@@ -137,7 +137,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
     parser.add_argument("--split-root", type=str, default="data/splits")
     parser.add_argument("--data-root", type=str, default="data/raw")
-    parser.add_argument("--output-root", type=str, default="results/neighbors")
+    parser.add_argument("--output-root", type=str, default="results/experiments/shared/neighbors")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--device", type=str, default="auto")

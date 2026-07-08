@@ -4,7 +4,7 @@ The script reads:
 - summary JSON files for final/best-checkpoint metrics
 - CSV files for epoch-level training curves
 
-It produces six high-value figures in results/figures:
+It produces six high-value figures in results/experiments/shared/figures:
 1. test_accuracy_by_augmentation.png
 2. test_accuracy_vs_k.png
 3. val_accuracy_curves_by_augmentation.png
@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-METRICS_DIR = Path("results/metrics_v2")
-FIGURES_DIR = Path("results/figures")
+METRICS_DIR = Path("results/experiments/baseline_100e/metrics")
+FIGURES_DIR = Path("results/experiments/shared/figures")
 
 AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup"]
 MODEL_ORDER = ["resnet50", "vit"]

@@ -129,7 +129,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=["class_aware", "class_agnostic"], required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
     parser.add_argument("--split-root", type=str, default="data/splits")
-    parser.add_argument("--output-root", type=str, default="results/neighbors")
+    parser.add_argument("--output-root", type=str, default="results/experiments/shared/neighbors")
     return parser.parse_args()
 
 

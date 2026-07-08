@@ -2,7 +2,7 @@
 
 Generated: 2026-07-03
 
-- Source: `results/experiments_v2/metrics/*_summary.json` plus the matching epoch CSV files.
+- Source: `results/experiments/simmixup_ablation_v2/metrics/*_summary.json` plus the matching epoch CSV files.
 - Scope: complete summaries only. All complete runs here use `cifar100`, `resnet50`, `k=100`, `subset_seed=0`, `train_seed=0`, and `epochs=50`.
 - `train_acc` is taken from the CSV row at `best_epoch`; `val_acc` and `test_acc` come from the summary JSON.
 - `test_acc` is the evaluation of the best validation checkpoint.
@@ -28,7 +28,7 @@ Generated: 2026-07-03
 
 ## Checkpoints Without Summary Metrics
 
-These checkpoint files exist under `results/experiments_v2/checkpoints`, but no matching `*_summary.json` was found under `results/experiments_v2/metrics`, so they are not included in the ranking table.
+These checkpoint files exist under `results/experiments/simmixup_ablation_v2/checkpoints`, but no matching `*_summary.json` was found under `results/experiments/simmixup_ablation_v2/metrics`, so they are not included in the ranking table.
 
 | Checkpoint run | Status |
 |---|---|

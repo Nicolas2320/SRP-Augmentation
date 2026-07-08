@@ -1070,7 +1070,7 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument("--train-seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
-    parser.add_argument("--output-root", type=str, default="results")
+    parser.add_argument("--output-root", type=str, default="results/experiments/manual_runs")
     parser.add_argument( # this is just for mixup
         "--mixup-alpha",
         type=float,
