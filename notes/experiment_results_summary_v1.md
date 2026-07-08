@@ -5,9 +5,9 @@ Generated: 2026-07-08
 Branch: `summary-v1`
 
 This note consolidates the experiment result files currently present under
-`results/`. It expands the earlier `notes/experiments_v2_results.md` note and
-keeps each result source visible, because several nominally similar runs appear
-in more than one metrics folder.
+`results/experiments/`. It replaces earlier one-off notes and keeps each result
+source visible, because several nominally similar runs appear in more than one
+metrics folder.
 
 ## Scope and Method
 

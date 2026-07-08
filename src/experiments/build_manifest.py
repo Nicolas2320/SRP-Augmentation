@@ -1,7 +1,7 @@
-"""Build a central manifest for saved experiment outputs.
+"""Build a CSV index for saved experiment outputs.
 
 The manifest is non-destructive: it reads existing summary JSON and CSV files
-under ``results/`` and writes an index under ``results/experiments/``.
+under ``results/`` and writes ``results/experiments/manifest.csv``.
 """
 
 from __future__ import annotations
@@ -191,9 +191,6 @@ def write_outputs(rows: list[dict[str, str]], output_dir: Path) -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    manifest_json = output_dir / "manifest.json"
-    manifest_json.write_text(json.dumps(rows, indent=2), encoding="utf-8")
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build the central experiment manifest.")
@@ -208,7 +205,6 @@ def main() -> None:
     rows = build_rows(args.results_root, repo_root)
     write_outputs(rows, args.output_dir)
     print(f"Wrote {len(rows)} experiments to {args.output_dir / 'manifest.csv'}")
-    print(f"Wrote {len(rows)} experiments to {args.output_dir / 'manifest.json'}")
 
 
 if __name__ == "__main__":

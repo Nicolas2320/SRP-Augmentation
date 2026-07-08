@@ -1,4 +1,4 @@
-# Central Experiment Catalog
+# Central Experiment Folder
 
 This folder is the central home for experiment outputs.
 
@@ -9,10 +9,8 @@ All local experiment artifacts have been consolidated here. The top-level
 
 | File | Purpose |
 |---|---|
-| `manifest.csv` | Spreadsheet-friendly index of every local `*_summary.json` run under `results/experiments/`. |
-| `manifest.json` | Machine-readable version of the same manifest. |
-| `INTEGRITY.md` | Known missing checkpoint/neighbor references from summary JSON files. |
-| `README.md` | This guide. |
+| `manifest.csv` | Generated spreadsheet-friendly index of every local `*_summary.json` run. Useful for sorting/filtering experiments without opening every JSON file. |
+| `README.md` | This folder map. |
 
 Regenerate the manifest after adding new results:
 
@@ -34,6 +32,10 @@ python src\experiments\build_manifest.py
 | `results/experiments/shared/anchor_scores` | Shared anchor-score artifacts. |
 | `results/experiments/shared/checkpoints` | Checkpoints from older top-level runs that shared `results/checkpoints`. |
 | `results/experiments/shared/figures` | Generated figures. |
+
+Current interpretation, incomplete runs, and known missing historical artifacts
+are tracked in `docs/project_status.md` and
+`notes/experiment_results_summary_v1.md`.
 
 ## Recommended Future Layout
 
