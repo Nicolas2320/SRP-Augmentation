@@ -64,6 +64,19 @@ def create_kshot_from_pool(targets, train_pool_indices, k, seed):
     return sample_per_class(pool_class_to_indices, n_per_class=k, seed=seed)
 
 
+def max_k_per_class(targets, train_pool_indices):
+    """Return the largest balanced per-class subset in the training pool."""
+    pool_class_to_indices = defaultdict(list)
+
+    for idx in train_pool_indices:
+        label = int(targets[idx])
+        pool_class_to_indices[label].append(idx)
+
+    if not pool_class_to_indices:
+        raise ValueError("Training pool must not be empty.")
+    return min(len(indices) for indices in pool_class_to_indices.values())
+
+
 def save_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
@@ -122,8 +135,15 @@ def main():
             split_info,
         )
 
-        for k in cfg["k_values"]:
-            for seed in subset_seeds:
+        max_k = max_k_per_class(targets, train_pool_indices)
+        k_values = list(cfg["k_values"])
+        if max_k not in k_values:
+            k_values.append(max_k)
+
+        for k in k_values:
+            # Every subset seed produces the same full-pool split.
+            seeds_for_k = [0] if k == max_k else subset_seeds
+            for seed in seeds_for_k:
                 train_indices = create_kshot_from_pool(
                     targets=targets,
                     train_pool_indices=train_pool_indices,
@@ -139,6 +159,8 @@ def main():
                     "num_train": len(train_indices),
                     "train_indices": train_indices,
                 }
+                if k == max_k:
+                    subset_info["is_max_train_pool"] = True
 
                 save_json(
                     output_root / dataset_name / f"k{k}_seed{seed}.json",

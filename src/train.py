@@ -11,7 +11,9 @@ Current v1 support
 - Dataset: CIFAR-10, CIFAR-100
 - Models: ResNet50, ViT
 - Augmentation: none, MixUp, CutMix, AugMix
-- k-shot split loading: k5, k10, k20, k50, k100
+- k-shot split loading from generated split files, including the full post-validation pool
+- standard CIFAR random-crop and horizontal-flip training augmentation
+- SGD with Nesterov momentum and milestone learning-rate decay by default
 - subset seed loading: seed0, seed1, seed2 if split files exist
 - fixed validation split
 - best validation checkpoint saving
@@ -100,11 +102,17 @@ class ExperimentConfig:
     anchor_selection: str
     anchor_top_pct: float
     anchor_score_power: float
-    dynamic_neighbor_pool: bool
-    easy_neighbor_pool_size: int
-    hard_neighbor_pool_size: int
-    difficulty_threshold: float
-    top_rank_only: bool
+    dynamic_neighbor_pool: bool = False
+    easy_neighbor_pool_size: int = 3
+    hard_neighbor_pool_size: int = 10
+    difficulty_threshold: float = 0.8
+    top_rank_only: bool = False
+    optimizer: str = "sgd"
+    momentum: float = 0.9
+    nesterov: bool = True
+    lr_milestones: tuple[int, ...] = (30, 60, 80)
+    lr_gamma: float = 0.2
+    cutmix_prob: float = 0.5
 
 
 # -----------------------------------------------------------------------------
@@ -129,6 +137,7 @@ class EMA:
     def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
         self.decay = float(decay)
         self.shadow: dict[str, torch.Tensor] = {}
+        self.backup: dict[str, torch.Tensor] = {}
         self._initialized = False
         self._model = model
         self.register()
@@ -152,12 +161,28 @@ class EMA:
                     self.shadow[name] = self.decay * self.shadow[name] + (1.0 - self.decay) * param.data
 
     def apply_to_model(self, model: nn.Module) -> None:
+        if self.backup:
+            raise RuntimeError("EMA weights are already applied; call restore() first")
         for name, param in model.named_parameters():
             if name in self.shadow:
+                self.backup[name] = param.data.clone()
                 param.data.copy_(self.shadow[name])
 
     def restore(self, model: nn.Module) -> None:
-        self.apply_to_model(model)
+        if not self.backup:
+            raise RuntimeError("No original model weights are available to restore")
+        for name, param in model.named_parameters():
+            if name in self.backup:
+                param.data.copy_(self.backup[name])
+        self.backup.clear()
+
+
+def seed_transform(transform: Any, seed: int) -> None:
+    """Seed transform-local RNGs, including transforms nested in Compose."""
+    if hasattr(transform, "set_seed"):
+        transform.set_seed(seed)
+    for child in getattr(transform, "transforms", []):
+        seed_transform(child, seed)
 
 
 def seed_worker(worker_id: int) -> None:
@@ -173,8 +198,7 @@ def seed_worker(worker_id: int) -> None:
     dataset = worker_info.dataset
     base_dataset = dataset.dataset if isinstance(dataset, Subset) else dataset
     transform = getattr(base_dataset, "transform", None)
-    if hasattr(transform, "set_seed"):
-        transform.set_seed(worker_seed)
+    seed_transform(transform, worker_seed)
 
 
 
@@ -272,24 +296,36 @@ def get_transforms(
         ]
     )
 
-    if augmentation == "none":
-        train_transform = eval_transform
-        return train_transform, eval_transform
+    spatial_augmentation = [
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+    ]
 
     if augmentation == "augmix":
-        train_transform = AugMixTransform(
-            mean=mean,
-            std=std,
-            severity=3,
-            width=3,
-            depth=-1,
-            alpha=1.0,
-            seed=seed,
+        train_transform = transforms.Compose(
+            [
+                *spatial_augmentation,
+                AugMixTransform(
+                    mean=mean,
+                    std=std,
+                    severity=3,
+                    width=3,
+                    depth=-1,
+                    alpha=1.0,
+                    seed=seed,
+                ),
+            ]
         )
         return train_transform, eval_transform
 
-    if augmentation in {"mixup", "cutmix", "simmixup", "simcutmix"}:
-        train_transform = eval_transform
+    if augmentation in {"none", "mixup", "cutmix", "simmixup", "simcutmix"}:
+        train_transform = transforms.Compose(
+            [
+                *spatial_augmentation,
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std),
+            ]
+        )
         return train_transform, eval_transform
 
     raise ValueError(f"Unsupported augmentation: {augmentation}")
@@ -885,11 +921,29 @@ def guided_output_parts(config: ExperimentConfig) -> list[str]:
 
 def experiment_output_dir(config: ExperimentConfig) -> Path:
     """Return the canonical folder for one experiment run."""
+    milestones = "-".join(str(epoch) for epoch in config.lr_milestones)
+    optimizer_part = filename_component(config.optimizer)
+    if config.optimizer == "sgd":
+        optimizer_part += (
+            f"_mom{format_float_for_filename(config.momentum)}"
+            f"_{'nesterov' if config.nesterov else 'no_nesterov'}"
+        )
+    recipe_part = (
+        f"{optimizer_part}_bs{config.batch_size}_"
+        f"lr{format_float_for_filename(config.lr)}_"
+        f"wd{format_float_for_filename(config.weight_decay)}_"
+        f"m{milestones}_g{format_float_for_filename(config.lr_gamma)}"
+    )
+    if config.augmentation == "cutmix":
+        recipe_part += f"_cp{format_float_for_filename(config.cutmix_prob)}"
+
     base = (
         Path(config.output_root)
         / filename_component(config.dataset)
         / filename_component(config.model)
         / f"k{config.k}"
+        / "standard_cifar_recipe"
+        / recipe_part
     )
     run = f"e{config.epochs}_s{config.subset_seed}_t{config.train_seed}"
 
@@ -970,6 +1024,7 @@ def save_metrics_csv(metrics: list[dict], output_path: Path) -> None:
 
     fieldnames = [
         "epoch",
+        "lr",
         "train_loss",
         "train_acc",
         "val_loss",
@@ -994,6 +1049,40 @@ def save_json(path: Path, data: dict) -> None:
 # -----------------------------------------------------------------------------
 # Main experiment logic
 # -----------------------------------------------------------------------------
+
+
+def build_optimizer(
+    config: ExperimentConfig,
+    model: nn.Module,
+) -> torch.optim.Optimizer:
+    """Build the configured optimizer."""
+    if config.optimizer == "sgd":
+        return torch.optim.SGD(
+            model.parameters(),
+            lr=config.lr,
+            momentum=config.momentum,
+            weight_decay=config.weight_decay,
+            nesterov=config.nesterov,
+        )
+    if config.optimizer == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(),
+            lr=config.lr,
+            weight_decay=config.weight_decay,
+        )
+    raise ValueError(f"Unsupported optimizer: {config.optimizer}")
+
+
+def build_lr_scheduler(
+    config: ExperimentConfig,
+    optimizer: torch.optim.Optimizer,
+) -> torch.optim.lr_scheduler.MultiStepLR:
+    """Build milestone decay for the 100-epoch standard CIFAR recipe."""
+    return torch.optim.lr_scheduler.MultiStepLR(
+        optimizer,
+        milestones=list(config.lr_milestones),
+        gamma=config.lr_gamma,
+    )
 
 
 def run_experiment(config: ExperimentConfig) -> None:
@@ -1025,19 +1114,19 @@ def run_experiment(config: ExperimentConfig) -> None:
 
     num_classes = get_num_classes(config.dataset)
     model = build_model(config.model, num_classes=num_classes).to(device)
-    ema = EMA(model, decay=0.999)
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=config.lr,
-        weight_decay=config.weight_decay,
-    )
+    optimizer = build_optimizer(config=config, model=model)
+    scheduler = build_lr_scheduler(config=config, optimizer=optimizer)
     augmentation_rng = np.random.default_rng(config.train_seed)
     
     cutmix = None
 
     if config.augmentation == "cutmix":
-        cutmix = CutMix(alpha=1.0, seed=config.train_seed)
+        cutmix = CutMix(
+            alpha=1.0,
+            probability=config.cutmix_prob,
+            seed=config.train_seed,
+        )
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1047,6 +1136,7 @@ def run_experiment(config: ExperimentConfig) -> None:
     
 
     for epoch in range(1, config.epochs + 1):
+        epoch_lr = float(optimizer.param_groups[0]["lr"])
         train_dataset = getattr(train_loader, "dataset", None)
         if hasattr(train_dataset, "set_epoch"):
             train_dataset.set_epoch(epoch)
@@ -1075,8 +1165,6 @@ def run_experiment(config: ExperimentConfig) -> None:
             mix_prob=effective_mix_prob,
             augmentation_rng=augmentation_rng,
         )
-        ema.update(model)
-
         val_loss, val_acc = evaluate(
             model=model,
             dataloader=val_loader,
@@ -1086,34 +1174,34 @@ def run_experiment(config: ExperimentConfig) -> None:
 
         row = {
             "epoch": epoch,
+            "lr": epoch_lr,
             "train_loss": train_loss,
             "train_acc": train_acc,
             "val_loss": val_loss,
             "val_acc": val_acc,
         }
         metrics.append(row)
+        scheduler.step()
 
         improved = val_acc > best_val_acc
         if improved:
             best_val_acc = val_acc
             best_epoch = epoch
-            ema.apply_to_model(model)
-
             torch.save(
                 {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
+                    "scheduler_state_dict": scheduler.state_dict(),
                     "best_val_acc": best_val_acc,
                     "config": asdict(config),
                 },
                 checkpoint_path,
             )
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device)["model_state_dict"])
-
         marker = " * Checkpoint - Best val_acc " if improved else ""
         print(
             f"Epoch {epoch:03d} | "
+            f"lr={epoch_lr:.6f} | "
             f"train_loss={train_loss:.4f} | "
             f"train_acc={train_acc:.4f} | "
             f"val_loss={val_loss:.4f} | "
@@ -1165,7 +1253,15 @@ def parse_args() -> ExperimentConfig:
 
     parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
     parser.add_argument("--model", type=str, default="resnet50", choices=["resnet50", "vit"])
-    parser.add_argument("--k", type=int, default=20, choices=[5, 10, 20, 50, 100])
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=20,
+        help=(
+            "Labeled images per class. CIFAR-100 k=max is 450 because "
+            "50 images per class remain reserved for validation."
+        ),
+    )
     parser.add_argument("--subset-seed", type=int, default=0)
     parser.add_argument(
     '--augmentation',
@@ -1174,10 +1270,42 @@ def parse_args() -> ExperimentConfig:
     choices=["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"],
     help='augmentation method'
     )
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        default="sgd",
+        choices=["sgd", "adamw"],
+    )
+    parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument(
+        "--nesterov",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable Nesterov momentum for SGD (default: enabled).",
+    )
+    parser.add_argument(
+        "--lr-milestones",
+        type=int,
+        nargs="+",
+        default=[30, 60, 80],
+        help="Epochs after which the learning rate is decayed.",
+    )
+    parser.add_argument(
+        "--lr-gamma",
+        type=float,
+        default=0.2,
+        help="Multiplicative LR decay applied at each milestone.",
+    )
+    parser.add_argument(
+        "--cutmix-prob",
+        type=float,
+        default=0.5,
+        help="Probability of applying baseline CutMix to a batch.",
+    )
     parser.add_argument("--train-seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
@@ -1302,6 +1430,29 @@ def parse_args() -> ExperimentConfig:
 
     args = parser.parse_args()
 
+    if args.k < 1:
+        parser.error("--k must be a positive integer")
+    if args.epochs < 1:
+        parser.error("--epochs must be a positive integer")
+    if args.batch_size < 1:
+        parser.error("--batch-size must be a positive integer")
+    if args.lr <= 0.0:
+        parser.error("--lr must be positive")
+    if args.weight_decay < 0.0:
+        parser.error("--weight-decay cannot be negative")
+    if args.momentum < 0.0:
+        parser.error("--momentum cannot be negative")
+    if args.nesterov and args.optimizer == "sgd" and args.momentum <= 0.0:
+        parser.error("--nesterov requires positive --momentum")
+    if args.lr_gamma <= 0.0:
+        parser.error("--lr-gamma must be positive")
+    if any(milestone < 1 for milestone in args.lr_milestones):
+        parser.error("--lr-milestones must contain positive epoch numbers")
+    if args.lr_milestones != sorted(set(args.lr_milestones)):
+        parser.error("--lr-milestones must be unique and increasing")
+    if not 0.0 <= args.cutmix_prob <= 1.0:
+        parser.error("--cutmix-prob must be between 0 and 1")
+
     return ExperimentConfig(
         dataset=args.dataset,
         model=args.model,
@@ -1334,6 +1485,12 @@ def parse_args() -> ExperimentConfig:
         hard_neighbor_pool_size=args.hard_neighbor_pool_size,
         difficulty_threshold=args.difficulty_threshold,
         top_rank_only=args.top_rank_only,
+        optimizer=args.optimizer,
+        momentum=args.momentum,
+        nesterov=args.nesterov,
+        lr_milestones=tuple(args.lr_milestones),
+        lr_gamma=args.lr_gamma,
+        cutmix_prob=args.cutmix_prob,
     )
 
 

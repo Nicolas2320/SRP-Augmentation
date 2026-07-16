@@ -131,6 +131,10 @@ The split generator first creates a fixed validation split, then samples k-shot
 training subsets from the remaining training pool. This prevents overlap between
 training and validation indices.
 
+The generated CIFAR-100 maximum split is `k=450`: 450 images per class for
+training and 50 images per class for validation. The maximum split is generated
+only for `subset_seed=0` because it contains the complete post-validation pool.
+
 ---
 
 ## Training
@@ -146,6 +150,30 @@ python src/train.py \
   --augmentation cutmix \
   --epochs 100
 ```
+
+The default training configuration follows a 100-epoch CIFAR-style recipe:
+
+- 32x32 CIFAR-style model input
+- random crop with 4 pixels of padding and random horizontal flip
+- SGD with Nesterov momentum 0.9
+- initial learning rate 0.1
+- learning-rate multiplier 0.2 after epochs 30, 60, and 80
+- weight decay 0.0005
+- batch size 128
+- CutMix probability 0.5
+
+The spatial crop and flip are applied to every training method. Therefore,
+`--augmentation none` means no additional mixing method; it still uses the
+standard CIFAR spatial augmentation.
+
+Full post-validation CIFAR-100 sanity check with CutMix:
+
+```powershell
+python -u src\train.py --dataset cifar100 --model resnet50 --k 450 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
+```
+
+If batch size 128 does not fit in GPU memory, use batch size 64 and learning
+rate 0.05 as a proportional starting point.
 
 Supported datasets:
 
