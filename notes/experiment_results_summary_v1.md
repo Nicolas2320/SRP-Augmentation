@@ -1,6 +1,6 @@
 # Experiment Results Summary v1
 
-Generated: 2026-07-08
+Generated: 2026-07-09
 
 Branch: `summary-v1`
 
@@ -11,7 +11,7 @@ reruns visible under `legacy/`.
 ## Scope and Method
 
 - Result sources: `summary.json` files plus their matching `metrics.csv` files.
-- Complete metric pairs found: 53 summary JSON files and 53 matching CSV files
+- Complete metric pairs found: 56 summary JSON files and 56 matching CSV files
   after deduplicating two equivalent reruns.
 - Missing summary/CSV pairs: none.
 - Anchor-score support file found: 1 CSV under `results/experiments/shared/anchor_scores/`.
@@ -35,7 +35,8 @@ aggregation.
 | `results/experiments/cifar100/resnet50/k100/simmixup` | ResNet50 k=100 SimMixUp and anchor-gated runs | 17 |
 | `results/experiments/cifar100/resnet50/k100/simcutmix` | ResNet50 k=100 SimCutMix runs | 3 |
 | `results/experiments/cifar100/resnet50/k100/legacy` | Non-exact retained reruns | 3 |
-| `results/experiments/cifar100/resnet50/k20/baselines` | ResNet50 k=20 100-epoch baselines | 4 |
+| `results/experiments/cifar100/resnet50/k20/baselines` | ResNet50 k=20 baselines | 6 |
+| `results/experiments/cifar100/resnet50/k20/simcutmix` | ResNet50 k=20 SimCutMix run | 1 |
 | `results/experiments/cifar100/resnet50/k50/baselines` | ResNet50 k=50 baselines | 6 |
 | `results/experiments/cifar100/resnet50/k50/simcutmix` | ResNet50 k=50 SimCutMix run | 1 |
 | `results/experiments/cifar100/vit/*/baselines` | ViT baselines for k=20, 50, 100 | 12 |
@@ -43,17 +44,18 @@ aggregation.
 
 ## Final-Stage Completion Check
 
-The planned final-stage command set was partly completed. The result files show
-that the k=100 same-budget CutMix run, the k=50 comparison, and the small k=100
-SimCutMix ablation were completed. The k=20 comparison is still missing.
+The planned final-stage command set is now locally complete for the single-seed
+same-budget comparisons. The result files include the k=100 same-budget CutMix
+run, the k=20 and k=50 lower-data comparisons, and the small k=100 SimCutMix
+ablation.
 
 | Planned experiment | Status | Evidence |
 |---|---|---|
 | k=100 CutMix, 50 epochs | complete | `results/experiments/cifar100/resnet50/k100/baselines/cutmix/e50_s0_t0/summary.json` |
 | k=100 SimCutMix K40 ranks 1-20 repeat | exact final-stage K40 file missing | K60 ranks 1-20 exists and has the same first 20 neighbors as the older K40 file, so it is effectively equivalent for this rank window |
-| k=20 MixUp, 50 epochs | missing | no canonical `results/experiments/cifar100/resnet50/k20/baselines/mixup/e50_s0_t0/summary.json` |
-| k=20 CutMix, 50 epochs | missing | no canonical `results/experiments/cifar100/resnet50/k20/baselines/cutmix/e50_s0_t0/summary.json` |
-| k=20 SimCutMix, 50 epochs | teammate summary only | teammate reports `18.14%` test accuracy, but no local canonical summary/CSV exists |
+| k=20 MixUp, 50 epochs | complete | `13.19%` test accuracy; `results/experiments/cifar100/resnet50/k20/baselines/mixup/e50_s0_t0/summary.json` |
+| k=20 CutMix, 50 epochs | complete | `13.36%` test accuracy; `results/experiments/cifar100/resnet50/k20/baselines/cutmix/e50_s0_t0/summary.json` |
+| k=20 SimCutMix, 50 epochs | complete | `16.49%` test accuracy; `results/experiments/cifar100/resnet50/k20/simcutmix/class_agnostic_K60/r1-20/uniform_nk20_a1_mp1_w0/e50_s0_t0/summary.json` |
 | k=50 MixUp, 50 epochs | complete, with discrepancy | local file reports `24.08%` test accuracy; teammate summary for the same path reports `25.16%` |
 | k=50 CutMix, 50 epochs | complete | `results/experiments/cifar100/resnet50/k50/baselines/cutmix/e50_s0_t0/summary.json` |
 | k=50 SimCutMix K60 ranks 1-20, 50 epochs | complete | `results/experiments/cifar100/resnet50/k50/simcutmix/class_agnostic_K60/r1-20/uniform_nk20_a1_mp1_w0/e50_s0_t0/summary.json` |
@@ -63,14 +65,13 @@ SimCutMix ablation were completed. The k=20 comparison is still missing.
 
 ## Teammate-Provided External Summaries
 
-These summaries were shared directly by a teammate and are not yet counted in
-the local `53` complete JSON/CSV metric pairs above. They are useful for
-orientation, but the local note should treat them as provisional until the
-matching summary JSON and CSV files are added or the local files are reconciled.
+These summaries were shared directly by a teammate. They are useful for
+orientation, but the local note should treat them as provisional where they
+disagree with the canonical local summary/CSV files.
 
 | Run | Teammate result | Local status | Action needed |
 |---|---:|---|---|
-| k=20 SimCutMix K60 ranks 1-20, 50 epochs | test `18.14%`, val `16.58%`, best epoch 43 | no local summary JSON or CSV found | add the teammate's summary JSON and matching CSV, or rerun locally |
+| k=20 SimCutMix K60 ranks 1-20, 50 epochs | test `18.14%`, val `16.58%`, best epoch 43 | local rerun reports test `16.49%`, val `15.88%`, best epoch 48 | keep the local canonical result unless the teammate file is selected as authoritative |
 | k=50 MixUp, 50 epochs | test `25.16%`, val `24.98%`, best epoch 37 | local summary for the same metrics path reports test `24.08%`, val `24.88%`, best epoch 40 | reconcile which file is authoritative; replace/update local files only if the teammate run is the intended result |
 
 ## High-Level Findings
@@ -90,12 +91,12 @@ the new SimCutMix K40 ranks 21-40 result stronger than the older comparison,
 because it beats CutMix at the same epoch budget rather than merely approaching a
 longer-budget baseline.
 
-The k=50 final-stage comparison is also positive for SimCutMix. At k=50,
+The lower-data final-stage comparisons are also positive for SimCutMix. At k=20,
+SimCutMix K60 ranks 1-20 reaches `16.49%`, compared with `13.36%` for CutMix and
+`13.19%` for MixUp under the same 50-epoch budget. At k=50,
 SimCutMix K60 ranks 1-20 reaches `28.04%`, compared with `26.07%` for CutMix and
-`24.08%` for MixUp under the same 50-epoch budget. This suggests the effect may
-not be limited to k=100. For k=20, there is a teammate-provided SimCutMix result
-(`18.14%`), but the local MixUp/CutMix baselines and matching SimCutMix files
-are still missing.
+`24.08%` for MixUp. This suggests the effect is not limited to k=100, although
+all of these comparisons still need multi-seed validation.
 
 Class-agnostic SimMixUp remains mostly close to MixUp. Across the 50-epoch
 ResNet50 k=100 runs, most SimMixUp variants sit around `35.5%` to `36.9%` test
@@ -208,11 +209,28 @@ the new 50-epoch CutMix result, `37.57%`, as reference points.
 | 27 | experiments_v2 | none | standard baseline | 46 | 98.79 | 32.06 | 31.47 | 5.6705 | 66.73 | -5.17 pp | -6.10 pp |
 | 28 | metrics_v2 | none | standard baseline | 31 | 97.01 | 30.00 | 29.19 | 5.5395 | 67.01 | -7.45 pp | -8.38 pp |
 
+## 50-Epoch ResNet50 k=20 Final-Stage Comparison
+
+This completes the same-budget low-data comparison locally. SimCutMix is the
+best k=20 method in the 50-epoch group, beating both standard baselines and also
+exceeding the older 100-epoch k=20 CutMix result (`15.46%`) in this single-seed
+setup.
+
+| Method | Setting | Best epoch | Train acc | Val acc | Test acc | Test loss | Gap | Delta vs CutMix |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| simcutmix | class-agnostic; K60; ranks 1-20; nk=20; alpha=1; mix_prob=1; warmup=0 | 48 | 72.77 | 15.88 | 16.49 | 4.2422 | 56.89 | +3.13 pp |
+| cutmix | standard baseline | 43 | 56.22 | 13.72 | 13.36 | 4.3180 | 42.50 | +0.00 pp |
+| mixup | standard baseline | 48 | 68.25 | 13.46 | 13.19 | 4.1637 | 54.79 | -0.17 pp |
+
+Note: a teammate-provided k=20 SimCutMix summary reports `18.14%` test accuracy.
+The table above keeps the local canonical rerun value, `16.49%`, until that
+discrepancy is reconciled.
+
 ## 50-Epoch ResNet50 k=50 Final-Stage Comparison
 
-This is the first same-budget lower-k comparison for SimCutMix. SimCutMix wins
-the k=50 group. A teammate-provided k=20 SimCutMix result exists, but the local
-k=20 same-budget comparison is still incomplete.
+This is the second same-budget lower-k comparison for SimCutMix. SimCutMix wins
+the k=50 group as well, strengthening the evidence that the method can help
+outside the k=100 setting.
 
 | Method | Setting | Best epoch | Train acc | Val acc | Test acc | Test loss | Gap | Delta vs CutMix |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -288,13 +306,14 @@ show that changing the rank window matters:
 | 100 | K60 ranks 1-20 | 38.65 | +1.08 pp | Equivalent to the older K40 ranks 1-20 run because the first 20 neighbors match |
 | 100 | K60 ranks 21-40 | 38.34 | +0.77 pp | Still beats 50-epoch CutMix |
 | 50 | K60 ranks 1-20 | 28.04 | +1.97 pp | Positive lower-k result |
+| 20 | K60 ranks 1-20 | 16.49 | +3.13 pp | Positive lowest-k result |
 
 The strongest setting, K40 ranks 21-40, reaches `40.02%` test accuracy at 50
 epochs. It beats the same-budget CutMix run (`37.57%`) and the older 100-epoch
 CutMix run (`38.75%`) in this single-seed setup. This makes SimCutMix the clear
-priority for the next experimental stage. The main remaining local gap is k=20:
-MixUp and CutMix are still missing, and the teammate SimCutMix result still needs
-matching local files before it can be counted in the main local summary.
+priority for the next experimental stage. The k=20 and k=50 results now both
+show positive same-budget deltas, so the main remaining need is multi-seed
+confirmation rather than more single-seed lower-k completion runs.
 
 ### Anchor-Gated SimMixUp
 
@@ -356,17 +375,17 @@ still close to MixUp.
 | Best SimMixUp run | ResNet50 k=100 SimMixUp K60 ranks 21-40, 50 epochs | 37.69 |
 | Best anchor-gated SimMixUp run | score_probability, top=0.2, power=0.5 | 36.20 |
 | Best lower-k guided run | ResNet50 k=50 SimCutMix K60 ranks 1-20, 50 epochs | 28.04 |
+| Best k=20 guided run | ResNet50 k=20 SimCutMix K60 ranks 1-20, 50 epochs | 16.49 |
 | Best ViT baseline | ViT k=100 CutMix, 100 epochs | 27.69 |
 
 ## Recommended Next Experiments
 
-1. Finish the k=20 final-stage comparison: add/rerun MixUp and CutMix, and add
-   the teammate SimCutMix JSON/CSV or rerun SimCutMix locally under the same
-   50-epoch budget.
-2. Repeat the strongest SimCutMix setting, k=100 K40 ranks 21-40, across at
+1. Repeat the strongest SimCutMix setting, k=100 K40 ranks 21-40, across at
    least three seeds and compare it to same-budget CutMix and MixUp.
-3. Repeat the k=50 comparison across seeds if the k=20 results also look
-   promising.
+2. Repeat the k=20 and k=50 SimCutMix comparisons across seeds, since both now
+   show positive single-seed same-budget deltas.
+3. Reconcile the teammate-provided k=20 SimCutMix and k=50 MixUp discrepancies
+   before freezing final tables.
 4. Add a same-budget 50-epoch no-augmentation reference only if the final table
    needs a complete baseline set.
 5. Avoid expanding SimMixUp ablations until SimCutMix has been tested across
@@ -383,8 +402,8 @@ still close to MixUp.
 The current experiment set supports three practical conclusions. First, CutMix is
 the strongest established standard baseline. Second, class-agnostic SimCutMix is
 now more than a near miss: the K40 ranks 21-40 run beats both 50-epoch and
-100-epoch CutMix in the current single-seed k=100 setup, and the k=50 SimCutMix
-comparison is also positive. Third, most SimMixUp and anchor-gated variants
-still produce results near MixUp, so the next stage should focus on completing
-the local k=20 comparison, reconciling the k=50 MixUp discrepancy, and repeating
-the strongest SimCutMix settings across seeds.
+100-epoch CutMix in the current single-seed k=100 setup, and the k=20 and k=50
+SimCutMix comparisons are also positive. Third, most SimMixUp and anchor-gated
+variants still produce results near MixUp, so the next stage should focus on
+reconciling external-result discrepancies and repeating the strongest SimCutMix
+settings across seeds.

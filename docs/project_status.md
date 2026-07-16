@@ -1,6 +1,6 @@
 # SRP-Augmentation Project Status
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
 ## Current Stage
 
@@ -32,7 +32,7 @@ clean.
 
 ## Current Evidence
 
-The local experiment catalog contains 53 complete summary/CSV metric pairs after
+The local experiment catalog contains 56 complete summary/CSV metric pairs after
 deduplicating two equivalent reruns. Three non-exact reruns are preserved
 under `legacy/` for provenance. Most results are CIFAR-100 with `subset_seed=0`
 and `train_seed=0`, so they are still preliminary single-seed evidence.
@@ -44,6 +44,8 @@ Main observations:
   class-agnostic K40 ranks 21-40, with `40.02%` test accuracy.
 - The repeated class-agnostic SimCutMix ranks 1-20 setup remains promising at
   `38.65%` test accuracy.
+- The k=20 and k=50 same-budget SimCutMix comparisons are both positive:
+  `16.49%` vs `13.36%` CutMix at k=20, and `28.04%` vs `26.07%` CutMix at k=50.
 - Anchor-gated SimMixUp did not improve over ungated guided mixing in the tested
   configurations.
 - Similarity-guided methods need multi-seed validation before making final
@@ -51,9 +53,9 @@ Main observations:
 
 ## Known Gaps
 
-- The k=20 same-budget comparison is incomplete locally: MixUp and CutMix
-  summary/CSV files are missing, and SimCutMix k=20 currently exists only as a
-  teammate-provided summary.
+- The k=20 local rerun and the teammate-provided k=20 SimCutMix summary disagree:
+  the local canonical file reports `16.49%` test accuracy, while the teammate
+  summary reports `18.14%`.
 - The k=50 MixUp result needs reconciliation: the local canonical summary
   reports `24.08%` test accuracy, while the teammate-provided result reports
   `25.16%`.
@@ -65,14 +67,15 @@ Main observations:
 
 ## Next Tasks
 
-1. Add or rerun the missing k=20 same-budget MixUp, CutMix, and SimCutMix runs.
-2. Reconcile the k=50 MixUp discrepancy and decide which result is authoritative.
-3. Build final same-budget tables for k=20, k=50, and k=100.
-4. Run multi-seed aggregation for the final selected settings.
-5. Generate final plots from the centralized experiment folder.
+1. Reconcile the k=20 SimCutMix and k=50 MixUp discrepancies and decide which
+   results are authoritative.
+2. Build final same-budget tables for k=20, k=50, and k=100.
+3. Run multi-seed aggregation for the final selected settings.
+4. Generate final plots from the centralized experiment folder.
 
 ## Bottom Line
 
-The experimental stage is close to a clean final comparison, but the k=20 gap,
-k=50 MixUp discrepancy, and missing multi-seed aggregation should be resolved
-before making final claims about the proposed method.
+The experimental stage now has a clean local single-seed comparison for k=20,
+k=50, and k=100, but external-result discrepancies and missing multi-seed
+aggregation should be resolved before making final claims about the proposed
+method.
