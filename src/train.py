@@ -100,6 +100,11 @@ class ExperimentConfig:
     anchor_selection: str
     anchor_top_pct: float
     anchor_score_power: float
+    dynamic_neighbor_pool: bool
+    easy_neighbor_pool_size: int
+    hard_neighbor_pool_size: int
+    difficulty_threshold: float
+    top_rank_only: bool
 
 
 # -----------------------------------------------------------------------------
@@ -116,6 +121,43 @@ def set_seed(seed: int) -> None:
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
+
+
+class EMA:
+    """Simple exponential moving average for model weights."""
+
+    def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
+        self.decay = float(decay)
+        self.shadow: dict[str, torch.Tensor] = {}
+        self._initialized = False
+        self._model = model
+        self.register()
+
+    def register(self) -> None:
+        for name, param in self._model.named_parameters():
+            if param.requires_grad:
+                self.shadow[name] = param.data.clone()
+        self._initialized = True
+
+    def update(self, model: nn.Module) -> None:
+        if not self._initialized:
+            self.register()
+        with torch.no_grad():
+            for name, param in model.named_parameters():
+                if not param.requires_grad:
+                    continue
+                if name not in self.shadow:
+                    self.shadow[name] = param.data.clone()
+                else:
+                    self.shadow[name] = self.decay * self.shadow[name] + (1.0 - self.decay) * param.data
+
+    def apply_to_model(self, model: nn.Module) -> None:
+        for name, param in model.named_parameters():
+            if name in self.shadow:
+                param.data.copy_(self.shadow[name])
+
+    def restore(self, model: nn.Module) -> None:
+        self.apply_to_model(model)
 
 
 def seed_worker(worker_id: int) -> None:
@@ -458,6 +500,11 @@ def build_dataloaders(
             mode=config.guided_mode,
             seed=config.train_seed,
             anchor_mix_probs=anchor_mix_probs,
+            dynamic_neighbor_pool=config.dynamic_neighbor_pool,
+            easy_neighbor_pool_size=config.easy_neighbor_pool_size,
+            hard_neighbor_pool_size=config.hard_neighbor_pool_size,
+            difficulty_threshold=config.difficulty_threshold,
+            top_rank_only=config.top_rank_only,
         )
     else:
         train_dataset = Subset(train_full, train_indices)
@@ -978,6 +1025,7 @@ def run_experiment(config: ExperimentConfig) -> None:
 
     num_classes = get_num_classes(config.dataset)
     model = build_model(config.model, num_classes=num_classes).to(device)
+    ema = EMA(model, decay=0.999)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -1027,6 +1075,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             mix_prob=effective_mix_prob,
             augmentation_rng=augmentation_rng,
         )
+        ema.update(model)
 
         val_loss, val_acc = evaluate(
             model=model,
@@ -1048,6 +1097,7 @@ def run_experiment(config: ExperimentConfig) -> None:
         if improved:
             best_val_acc = val_acc
             best_epoch = epoch
+            ema.apply_to_model(model)
 
             torch.save(
                 {
@@ -1059,6 +1109,7 @@ def run_experiment(config: ExperimentConfig) -> None:
                 },
                 checkpoint_path,
             )
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device)["model_state_dict"])
 
         marker = " * Checkpoint - Best val_acc " if improved else ""
         print(
@@ -1123,7 +1174,7 @@ def parse_args() -> ExperimentConfig:
     choices=["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"],
     help='augmentation method'
     )
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
@@ -1139,14 +1190,14 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument( # this is just for mixup
         "--mixup-alpha",
         type=float,
-        default=1.0,
-        help="MixUp alpha parameter. Default: 1.0.",
+        default=0.1,
+        help="MixUp alpha parameter. Default: 0.1 for weaker mixing.",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=0,
-        help="Use 0 on Windows for fewer DataLoader issues.",
+        default=2,
+        help="Use 2 workers for faster loading on Windows.",
     )
     parser.add_argument(
         "--neighbor-path",
@@ -1158,7 +1209,7 @@ def parse_args() -> ExperimentConfig:
         "--guided-mode",
         type=str,
         default="class_aware",
-        choices=["class_aware", "class_agnostic"],
+        choices=["class_aware", "class_agnostic", "different_label"],
         help="Neighbor mode expected in --neighbor-path.",
     )
     parser.add_argument(
@@ -1179,20 +1230,20 @@ def parse_args() -> ExperimentConfig:
     parser.add_argument(
         "--pair-sampling",
         type=str,
-        default="uniform",
+        default="weighted",
         choices=["uniform", "weighted"],
         help="How to sample partners from each saved neighbor set.",
     )
     parser.add_argument(
         "--mix-prob",
         type=float,
-        default=1.0,
+        default=0.3,
         help="Probability of applying SimMixUp to a paired batch.",
     )
     parser.add_argument(
         "--mix-warmup-epochs",
         type=int,
-        default=0,
+        default=5,
         help="Disable SimMixUp for the first N epochs.",
     )
     parser.add_argument(
@@ -1219,6 +1270,34 @@ def parse_args() -> ExperimentConfig:
         type=float,
         default=1.0,
         help="Exponent for score_probability anchor mixing.",
+    )
+    parser.add_argument(
+        "--dynamic-neighbor-pool",
+        action="store_true",
+        help="Use a smaller neighbor pool for easy samples and a larger one for harder samples.",
+    )
+    parser.add_argument(
+        "--easy-neighbor-pool-size",
+        type=int,
+        default=3,
+        help="How many top neighbors to consider for easy samples.",
+    )
+    parser.add_argument(
+        "--hard-neighbor-pool-size",
+        type=int,
+        default=10,
+        help="How many neighbors to consider for difficult samples.",
+    )
+    parser.add_argument(
+        "--difficulty-threshold",
+        type=float,
+        default=0.8,
+        help="Similarity threshold used to classify a sample as easy versus hard.",
+    )
+    parser.add_argument(
+        "--top-rank-only",
+        action="store_true",
+        help="Use only the single strongest-ranked neighbor for every anchor.",
     )
 
     args = parser.parse_args()
@@ -1250,6 +1329,11 @@ def parse_args() -> ExperimentConfig:
         anchor_selection=args.anchor_selection,
         anchor_top_pct=args.anchor_top_pct,
         anchor_score_power=args.anchor_score_power,
+        dynamic_neighbor_pool=args.dynamic_neighbor_pool,
+        easy_neighbor_pool_size=args.easy_neighbor_pool_size,
+        hard_neighbor_pool_size=args.hard_neighbor_pool_size,
+        difficulty_threshold=args.difficulty_threshold,
+        top_rank_only=args.top_rank_only,
     )
 
 

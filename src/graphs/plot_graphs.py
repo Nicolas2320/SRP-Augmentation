@@ -83,6 +83,7 @@ def augmentation_label(data: dict) -> str:
     guided_short = {
         "class_aware": "ca",
         "class_agnostic": "cg",
+        "different_label": "dl",
     }.get(guided_mode, guided_mode)
 
     label = f"simmixup_{guided_short}_nk{neighbor_k}_{rank_label}_{pair_sampling}_mp{mix_prob}"
@@ -138,6 +139,7 @@ def augmentation_display_label(label: str) -> str:
     mode_name = {
         "ca": "CA",
         "cg": "CG",
+        "dl": "DL",
     }.get(mode, mode.upper())
 
     neighbor_k = next((part[2:] for part in parts if part.startswith("nk")), "?")

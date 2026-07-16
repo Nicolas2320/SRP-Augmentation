@@ -2,22 +2,22 @@
   "dataset": "cifar100",
   "k": 20,
   "subset_seed": 0,
-  "encoder": "resnet18_imagenet",
+  "encoder": "resnet50_imagenet",
   "split_hash": "c15c88916161da4fc15f84ceaa608c35aa8afcfe3cd3c52c53d651bba059ff94",
   "validation_split_hash": "001490b0edd6d867e340311654912ce4eaa33d81587b43cdce26b441a51449a8",
   "train_indices_hash": "1675429557d2647a43ddd8eef8990a5b928a3cf9ccbb6239e39d388176c83e2b",
   "split_path": "data\\splits\\cifar100\\k20_seed0.json",
   "validation_split_path": "data\\splits\\cifar100\\fixed_validation_split.json",
-  "embedding_path": "results/experiments/shared/neighbors/cifar100/k20_seed0/embeddings_resnet18_imagenet.pt",
+  "embedding_path": "results\\neighbors\\cifar100\\k20_seed0\\embeddings_resnet18_imagenet.pt",
   "num_train": 2000,
-  "embedding_dim": 512,
+  "embedding_dim": 2048,
   "source_dataset_partition": "torchvision_train_true",
   "uses_validation_samples": false,
   "uses_test_samples": false,
   "validation_overlap_count": 0,
   "neighbors": {
     "class_aware": {
-      "path": "results/experiments/shared/neighbors/cifar100/k20_seed0/neighbors_class_aware_K19.pt",
+      "path": "results\\neighbors\\cifar100\\k20_seed0\\neighbors_class_aware_K19.pt",
       "requested_max_neighbors": 20,
       "num_neighbors": 19
     }

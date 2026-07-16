@@ -73,6 +73,23 @@ def class_agnostic_neighbors():
     }
 
 
+def different_label_neighbors():
+    return {
+        "mode": "different_label",
+        "original_indices": torch.tensor([10, 11, 12, 20, 21, 22]),
+        "neighbor_indices": torch.tensor(
+            [
+                [20, 21],
+                [21, 22],
+                [22, 20],
+                [10, 11],
+                [11, 12],
+                [12, 10],
+            ]
+        ),
+    }
+
+
 class IndexedDatasetTests(unittest.TestCase):
     def setUp(self):
         self.base_dataset = SyntheticIndexedDataset()
@@ -155,6 +172,34 @@ class IndexedDatasetTests(unittest.TestCase):
         labels = [(dataset[position][1], dataset[position][3]) for position in range(len(dataset))]
 
         self.assertTrue(any(label_i != label_j for label_i, label_j in labels))
+
+    def test_different_label_pairs_always_cross_labels(self):
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            self.train_indices,
+            different_label_neighbors(),
+            mode="different_label",
+            seed=0,
+        )
+
+        for position in range(len(dataset)):
+            _, label_i, _, label_j, _, _ = dataset[position]
+            self.assertNotEqual(label_i, label_j)
+
+    def test_different_label_rejects_same_label_neighbor(self):
+        neighbors = different_label_neighbors()
+        neighbors["neighbor_indices"] = neighbors["neighbor_indices"].clone()
+        neighbors["neighbor_indices"][0] = torch.tensor([11, 12])
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            self.train_indices,
+            neighbors,
+            mode="different_label",
+            seed=0,
+        )
+
+        with self.assertRaises(ValueError):
+            dataset[0]
 
     def test_same_seed_gives_same_partner_sequence(self):
         first = GuidedPairDataset(
@@ -239,6 +284,52 @@ class IndexedDatasetTests(unittest.TestCase):
                 seed=0,
                 anchor_mix_probs={10: 1.0},
             )
+
+    def test_dynamic_neighbor_pool_uses_smaller_pool_for_easy_samples(self):
+        payload = {
+            "mode": "class_aware",
+            "original_indices": torch.tensor([10, 11, 12]),
+            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
+            "similarities": torch.tensor([[0.95, 0.82, 0.74, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05]]),
+        }
+
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            [10],
+            payload,
+            mode="class_aware",
+            seed=0,
+            pair_sampling="weighted",
+            dynamic_neighbor_pool=True,
+            easy_neighbor_pool_size=3,
+            hard_neighbor_pool_size=6,
+            difficulty_threshold=0.8,
+        )
+
+        self.assertLess(dataset._sample_neighbor_slot(0, 0), 3)
+
+    def test_dynamic_neighbor_pool_uses_larger_pool_for_hard_samples(self):
+        payload = {
+            "mode": "class_aware",
+            "original_indices": torch.tensor([10, 11, 12]),
+            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
+            "similarities": torch.tensor([[0.35, 0.32, 0.30, 0.28, 0.25, 0.20, 0.18, 0.15, 0.10, 0.05]]),
+        }
+
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            [10],
+            payload,
+            mode="class_aware",
+            seed=0,
+            pair_sampling="weighted",
+            dynamic_neighbor_pool=True,
+            easy_neighbor_pool_size=3,
+            hard_neighbor_pool_size=6,
+            difficulty_threshold=0.8,
+        )
+
+        self.assertLess(dataset._sample_neighbor_slot(0, 0), 6)
 
 
 class ExistingTrainingShapeTests(unittest.TestCase):

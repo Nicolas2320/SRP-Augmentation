@@ -12,6 +12,7 @@ import torch.nn.functional as F
 
 
 ENCODER_CHOICES = ["resnet18_imagenet", "resnet50_imagenet"]
+NEIGHBOR_MODE_CHOICES = ["class_aware", "class_agnostic", "different_label"]
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -49,6 +50,11 @@ def effective_neighbor_count(labels: torch.Tensor, mode: str, max_neighbors: int
     if mode == "class_agnostic":
         return min(max_neighbors, int(labels.numel()) - 1)
 
+    if mode == "different_label":
+        _, counts = torch.unique(labels, return_counts=True)
+        largest_class_count = int(counts.max().item())
+        return min(max_neighbors, int(labels.numel()) - largest_class_count)
+
     if mode != "class_aware":
         raise ValueError(f"Unsupported neighbor mode: {mode}")
 
@@ -85,6 +91,8 @@ def build_neighbors(
     eligible.fill_diagonal_(False)
     if mode == "class_aware":
         eligible &= labels[:, None] == labels[None, :]
+    elif mode == "different_label":
+        eligible &= labels[:, None] != labels[None, :]
 
     masked_similarities = similarities.masked_fill(~eligible, float("-inf"))
     values, neighbor_positions = torch.topk(masked_similarities, k=neighbor_count, dim=1)
@@ -117,13 +125,13 @@ def update_metadata(metadata_path: Path, mode: str, neighbor_path: Path, payload
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build class-aware or class-agnostic neighbors from saved embeddings."
+        description="Build filtered nearest-neighbor files from saved embeddings."
     )
     parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
-    parser.add_argument("--mode", choices=["class_aware", "class_agnostic", "both"], required=True)
+    parser.add_argument("--mode", choices=NEIGHBOR_MODE_CHOICES + ["both"], required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
     parser.add_argument("--output-root", type=str, default="results/experiments/shared/neighbors")
     return parser.parse_args()
