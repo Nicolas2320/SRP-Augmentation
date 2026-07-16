@@ -12,6 +12,7 @@ import torch
 
 
 ENCODER_CHOICES = ["resnet18_imagenet", "resnet50_imagenet"]
+NEIGHBOR_MODE_CHOICES = ["class_aware", "class_agnostic", "different_label"]
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -109,6 +110,11 @@ def validate_neighbors(neighbor_payload: dict[str, Any], mode: str) -> list[str]
     if mode == "class_aware":
         messages.append("class-aware labels OK")
 
+    if mode == "different_label" and (neighbor_labels == labels[:, None]).any():
+        raise AssertionError("different-label neighbors include a matching label")
+    if mode == "different_label":
+        messages.append("different-label labels OK")
+
     if mode == "class_agnostic":
         mixed_count = int((neighbor_labels != labels[:, None]).sum().item())
         messages.append(f"class-agnostic mixed-label neighbor count: {mixed_count}")
@@ -126,7 +132,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
-    parser.add_argument("--mode", choices=["class_aware", "class_agnostic"], required=True)
+    parser.add_argument("--mode", choices=NEIGHBOR_MODE_CHOICES, required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
     parser.add_argument("--split-root", type=str, default="data/splits")
     parser.add_argument("--output-root", type=str, default="results/neighbors")

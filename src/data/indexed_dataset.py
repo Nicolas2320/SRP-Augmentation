@@ -10,7 +10,8 @@ from torch.utils.data import Dataset
 
 
 PairSampling = Literal["uniform", "weighted"]
-NeighborMode = Literal["class_aware", "class_agnostic"]
+NeighborMode = Literal["class_aware", "class_agnostic", "different_label"]
+NEIGHBOR_MODES = {"class_aware", "class_agnostic", "different_label"}
 
 
 class IndexedDataset(Dataset):
@@ -50,7 +51,7 @@ class GuidedPairDataset(Dataset):
     ):
         if pair_sampling not in {"uniform", "weighted"}:
             raise ValueError(f"Unsupported pair_sampling: {pair_sampling}")
-        if mode not in {"class_aware", "class_agnostic"}:
+        if mode not in NEIGHBOR_MODES:
             raise ValueError(f"Unsupported mode: {mode}")
 
         self.base_dataset = base_dataset
@@ -144,6 +145,11 @@ class GuidedPairDataset(Dataset):
             raise ValueError(
                 f"class_aware pair has mismatched labels for indices {idx_i} and {idx_j}: "
                 f"{label_i} != {label_j}"
+            )
+        if self.mode == "different_label" and int(label_i) == int(label_j):
+            raise ValueError(
+                f"different_label pair has matching labels for indices {idx_i} and {idx_j}: "
+                f"{label_i} == {label_j}"
             )
 
         if self.anchor_mix_probs is None:
