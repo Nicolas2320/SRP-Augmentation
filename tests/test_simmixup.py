@@ -1,6 +1,8 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import torch
@@ -12,7 +14,14 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from src.augmentations.similarity_guided import apply_simmixup, simmixup_criterion
-from src.train import ExperimentConfig, experiment_name, train_one_epoch
+from src.train import (
+    EMA,
+    ExperimentConfig,
+    experiment_name,
+    load_anchor_mix_probabilities,
+    load_neighbor_payload,
+    train_one_epoch,
+)
 
 
 class FixedRng:
@@ -83,6 +92,22 @@ class SimMixUpTests(unittest.TestCase):
 
         self.assertTrue(torch.equal(mixed, self.images_j))
 
+    def test_sample_mix_probability_selects_individual_rows(self):
+        mixed, _, _, lam = apply_simmixup(
+            self.images_i,
+            self.targets_i,
+            self.images_j,
+            self.targets_j,
+            sample_mix_prob=torch.tensor([1.0, 0.0, 1.0]),
+            rng=FixedRng(lam=0.25),
+        )
+
+        self.assertTrue(torch.is_tensor(lam))
+        self.assertTrue(torch.allclose(lam, torch.tensor([0.25, 1.0, 0.25])))
+        self.assertTrue(torch.allclose(mixed[0], torch.full_like(mixed[0], 0.75)))
+        self.assertTrue(torch.equal(mixed[1], self.images_i[1]))
+        self.assertTrue(torch.allclose(mixed[2], torch.full_like(mixed[2], 0.75)))
+
     def test_alpha_non_positive_disables_mixing(self):
         mixed, targets_i, targets_j, lam = apply_simmixup(
             self.images_i,
@@ -151,6 +176,31 @@ class SimMixUpTests(unittest.TestCase):
 
         self.assertTrue(torch.allclose(loss, expected))
 
+    def test_loss_accepts_per_sample_lambda(self):
+        logits = torch.tensor(
+            [
+                [2.0, 0.5],
+                [0.1, 1.7],
+                [1.2, 0.8],
+            ],
+            dtype=torch.float32,
+        )
+        criterion = nn.CrossEntropyLoss()
+        lam = torch.tensor([0.25, 1.0, 0.25])
+
+        loss = simmixup_criterion(
+            criterion=criterion,
+            predictions=logits,
+            targets_i=self.targets_i,
+            targets_j=self.targets_j,
+            lam=lam,
+        )
+        loss_i = nn.functional.cross_entropy(logits, self.targets_i, reduction="none")
+        loss_j = nn.functional.cross_entropy(logits, self.targets_j, reduction="none")
+        expected = (lam * loss_i + (1.0 - lam) * loss_j).mean()
+
+        self.assertTrue(torch.allclose(loss, expected))
+
     def test_batch_shape_remains_bchw(self):
         mixed, *_ = apply_simmixup(
             self.images_i,
@@ -193,6 +243,17 @@ class SimMixUpTests(unittest.TestCase):
         self.assertGreaterEqual(accuracy, 0.0)
         self.assertLessEqual(accuracy, 1.0)
 
+    def test_ema_updates_model_weights(self):
+        model = TinyClassifier()
+        ema = EMA(model, decay=0.5)
+        with torch.no_grad():
+            model.net[1].weight.copy_(torch.ones_like(model.net[1].weight) * 2.0)
+            model.net[1].bias.copy_(torch.ones_like(model.net[1].bias) * 3.0)
+        ema.update(model)
+
+        self.assertTrue(torch.allclose(ema.shadow["net.1.weight"], torch.ones_like(model.net[1].weight) * 1.0))
+        self.assertTrue(torch.allclose(ema.shadow["net.1.bias"], torch.ones_like(model.net[1].bias) * 1.5))
+
     def test_experiment_name_separates_simmixup_variants(self):
         base = dict(
             dataset="cifar100",
@@ -213,18 +274,88 @@ class SimMixUpTests(unittest.TestCase):
             neighbor_path="neighbors.pt",
             guided_mode="class_aware",
             neighbor_k=10,
+            neighbor_rank_start=1,
             pair_sampling="uniform",
             mix_prob=1.0,
             mix_warmup_epochs=0,
+            anchor_score_path=None,
+            anchor_selection="top_fraction",
+            anchor_top_pct=0.2,
+            anchor_score_power=1.0,
         )
         class_aware = ExperimentConfig(**base)
         class_agnostic = ExperimentConfig(**{**base, "guided_mode": "class_agnostic"})
         lower_mix_prob = ExperimentConfig(**{**base, "mix_prob": 0.5})
+        later_rank_window = ExperimentConfig(**{**base, "neighbor_rank_start": 21})
 
         self.assertNotEqual(experiment_name(class_aware), experiment_name(class_agnostic))
         self.assertNotEqual(experiment_name(class_aware), experiment_name(lower_mix_prob))
+        self.assertNotEqual(experiment_name(class_aware), experiment_name(later_rank_window))
         self.assertIn("class_aware", experiment_name(class_aware))
+        self.assertIn("r1-10", experiment_name(class_aware))
+        self.assertIn("r21-30", experiment_name(later_rank_window))
         self.assertIn("mp0p5", experiment_name(lower_mix_prob))
+
+    def test_load_neighbor_payload_selects_rank_window(self):
+        payload = {
+            "mode": "class_agnostic",
+            "original_indices": torch.tensor([0, 1]),
+            "neighbor_indices": torch.tensor(
+                [
+                    [10, 11, 12, 13],
+                    [20, 21, 22, 23],
+                ]
+            ),
+            "similarities": torch.tensor(
+                [
+                    [0.9, 0.8, 0.7, 0.6],
+                    [0.5, 0.4, 0.3, 0.2],
+                ]
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            neighbor_path = Path(temp_dir) / "neighbors.pt"
+            torch.save(payload, neighbor_path)
+
+            loaded = load_neighbor_payload(
+                path=str(neighbor_path),
+                guided_mode="class_agnostic",
+                neighbor_k=2,
+                neighbor_rank_start=3,
+            )
+
+        self.assertTrue(torch.equal(loaded["neighbor_indices"], torch.tensor([[12, 13], [22, 23]])))
+        self.assertTrue(
+            torch.equal(
+                loaded["similarities"],
+                torch.tensor([[0.7, 0.6], [0.3, 0.2]]),
+            )
+        )
+        self.assertEqual(loaded["num_neighbors"], 2)
+        self.assertEqual(loaded["neighbor_rank_start"], 3)
+        self.assertEqual(loaded["neighbor_rank_end"], 4)
+
+    def test_load_anchor_mix_probabilities_selects_top_fraction(self):
+        payload = {
+            "original_indices": torch.tensor([10, 20, 30, 40]),
+            "score": torch.tensor([0.1, 0.9, 0.2, 0.8]),
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            score_path = Path(temp_dir) / "scores.pt"
+            torch.save(payload, score_path)
+
+            mix_probs = load_anchor_mix_probabilities(
+                path=str(score_path),
+                train_indices=[10, 20, 30, 40],
+                selection="top_fraction",
+                top_pct=0.5,
+                score_power=1.0,
+                seed=0,
+            )
+
+        self.assertEqual(mix_probs, {10: 0.0, 20: 1.0, 30: 0.0, 40: 1.0})
 
 
 if __name__ == "__main__":
