@@ -133,7 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
     parser.add_argument("--mode", choices=NEIGHBOR_MODE_CHOICES + ["both"], required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
-    parser.add_argument("--output-root", type=str, default="results/neighbors")
+    parser.add_argument("--output-root", type=str, default="results/experiments/shared/neighbors")
     return parser.parse_args()
 
 

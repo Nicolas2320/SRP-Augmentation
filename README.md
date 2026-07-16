@@ -76,9 +76,12 @@ SRP-Augmentation/
 |-- notes/                      # Project notes and documentation
 |
 |-- results/
-|   |-- checkpoints/            # Best validation checkpoints, ignored by Git
-|   |-- figures/                # Generated plots, ignored by Git
-|   `-- metrics/                # CSV metrics and JSON summaries
+|   `-- experiments/            # Central experiment outputs and manifest
+|       |-- manifest.csv         # Index of local experiment summaries
+|       |-- cifar100/            # dataset/model/k/method experiment runs
+|       |   |-- resnet50/
+|       |   `-- vit/
+|       `-- shared/              # Shared neighbors, anchor scores, figures
 |
 |-- src/
 |   |-- augmentations/

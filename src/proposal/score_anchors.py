@@ -209,7 +209,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embedding-path", type=str, required=True)
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
-    parser.add_argument("--output-root", type=str, default="results/anchor_scores")
+    parser.add_argument("--output-root", type=str, default="results/experiments/shared/anchor_scores")
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--device", type=str, default="auto")

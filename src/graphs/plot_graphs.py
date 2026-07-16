@@ -4,7 +4,7 @@ The script reads:
 - summary JSON files for final/best-checkpoint metrics
 - CSV files for epoch-level training curves
 
-It produces six high-value figures in results/figures:
+It produces six high-value figures in results/experiments/shared/figures:
 1. test_accuracy_by_augmentation.png
 2. test_accuracy_vs_k.png
 3. val_accuracy_curves_by_augmentation.png
@@ -23,10 +23,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-METRICS_DIR = Path("results/metrics_v2")
-FIGURES_DIR = Path("results/figures")
+EXPERIMENTS_DIR = Path("results/experiments")
+FIGURES_DIR = Path("results/experiments/shared/figures")
 
-AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup"]
+AUGMENTATION_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 MODEL_ORDER = ["resnet50", "vit"]
 COLORS = {
     "none": "#4C566A",
@@ -34,6 +34,7 @@ COLORS = {
     "cutmix": "#A3BE8C",
     "augmix": "#D08770",
     "simmixup": "#B48EAD",
+    "simcutmix": "#EBCB8B",
 }
 
 DISPLAY_NAMES = {
@@ -41,6 +42,7 @@ DISPLAY_NAMES = {
     "mixup": "MixUp",
     "cutmix": "CutMix",
     "augmix": "AugMix",
+    "simcutmix": "SimCutMix",
 }
 
 
@@ -151,10 +153,12 @@ def augmentation_display_label(label: str) -> str:
     return display
 
 
-def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
+def load_summary_metrics(experiments_dir: Path) -> pd.DataFrame:
     rows = []
 
-    for path in sorted(metrics_dir.glob("*_summary.json")):
+    for path in sorted(experiments_dir.rglob("summary.json")):
+        if "legacy" in path.parts:
+            continue
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
@@ -175,7 +179,7 @@ def load_summary_metrics(metrics_dir: Path) -> pd.DataFrame:
         )
 
     if not rows:
-        raise FileNotFoundError(f"No summary JSON files found in {metrics_dir}")
+        raise FileNotFoundError(f"No summary JSON files found in {experiments_dir}")
 
     df = pd.DataFrame(rows)
     augmentation_categories = ordered_augmentations(df)
@@ -208,20 +212,20 @@ def aggregate_summary(df: pd.DataFrame) -> pd.DataFrame:
     return grouped
 
 
-def resolve_metrics_path(path_text: str, metrics_dir: Path) -> Path:
+def resolve_metrics_path(path_text: str, experiments_dir: Path) -> Path:
     path = Path(path_text)
     if path.exists():
         return path
 
-    fallback = metrics_dir / Path(path_text.replace("\\", "/")).name
+    fallback = experiments_dir / Path(path_text.replace("\\", "/")).name
     return fallback
 
 
-def load_epoch_metrics(summary_df: pd.DataFrame, metrics_dir: Path) -> pd.DataFrame:
+def load_epoch_metrics(summary_df: pd.DataFrame, experiments_dir: Path) -> pd.DataFrame:
     frames = []
 
     for row in summary_df.itertuples(index=False):
-        metrics_path = resolve_metrics_path(row.metrics_path, metrics_dir)
+        metrics_path = resolve_metrics_path(row.metrics_path, experiments_dir)
         if not metrics_path.exists():
             print(f"Skipping missing metric CSV: {metrics_path}")
             continue
@@ -236,7 +240,7 @@ def load_epoch_metrics(summary_df: pd.DataFrame, metrics_dir: Path) -> pd.DataFr
         frames.append(metrics)
 
     if not frames:
-        raise FileNotFoundError(f"No metric CSV files found from summaries in {metrics_dir}")
+        raise FileNotFoundError(f"No metric CSV files found from summaries in {experiments_dir}")
 
     return pd.concat(frames, ignore_index=True)
 
@@ -485,9 +489,9 @@ def plot_test_accuracy_heatmap(summary: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    summary_df = load_summary_metrics(METRICS_DIR)
+    summary_df = load_summary_metrics(EXPERIMENTS_DIR)
     summary = aggregate_summary(summary_df)
-    epoch_metrics = load_epoch_metrics(summary_df, METRICS_DIR)
+    epoch_metrics = load_epoch_metrics(summary_df, EXPERIMENTS_DIR)
 
     print(f"Loaded {len(summary_df)} experiment summaries.")
     print(f"Loaded epoch metrics for {epoch_metrics['source_csv'].nunique()} runs.")
