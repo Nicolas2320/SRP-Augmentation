@@ -73,6 +73,39 @@ class ProposalNeighborTests(unittest.TestCase):
         self.assertTrue((payload["similarities"][:, :-1] >= payload["similarities"][:, 1:]).all())
         validate_neighbors(payload, "class_agnostic")
 
+    def test_blockwise_neighbors_match_single_block_results(self):
+        single_block = build_neighbors(
+            self.embeddings,
+            self.labels,
+            self.indices,
+            mode="class_agnostic",
+            max_neighbors=4,
+            query_batch_size=len(self.embeddings),
+        )
+        multi_block = build_neighbors(
+            self.embeddings,
+            self.labels,
+            self.indices,
+            mode="class_agnostic",
+            max_neighbors=4,
+            query_batch_size=2,
+        )
+
+        self.assertTrue(torch.equal(single_block["neighbor_positions"], multi_block["neighbor_positions"]))
+        self.assertTrue(torch.allclose(single_block["similarities"], multi_block["similarities"]))
+        self.assertEqual(multi_block["query_batch_size"], 2)
+
+    def test_blockwise_neighbors_reject_invalid_batch_size(self):
+        with self.assertRaises(ValueError):
+            build_neighbors(
+                self.embeddings,
+                self.labels,
+                self.indices,
+                mode="class_agnostic",
+                max_neighbors=4,
+                query_batch_size=0,
+            )
+
     def test_different_label_neighbors_exclude_same_label_pairs(self):
         payload = build_neighbors(
             self.embeddings,

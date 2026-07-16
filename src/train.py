@@ -11,7 +11,7 @@ Current v1 support
 - Dataset: CIFAR-10, CIFAR-100
 - Models: ResNet50, ViT
 - Augmentation: none, MixUp, CutMix, AugMix
-- k-shot split loading: k5, k10, k20, k50, k100
+- k-shot split loading from generated split files, including larger and max-pool splits
 - subset seed loading: seed0, seed1, seed2 if split files exist
 - fixed validation split
 - best validation checkpoint saving
@@ -100,11 +100,11 @@ class ExperimentConfig:
     anchor_selection: str
     anchor_top_pct: float
     anchor_score_power: float
-    dynamic_neighbor_pool: bool
-    easy_neighbor_pool_size: int
-    hard_neighbor_pool_size: int
-    difficulty_threshold: float
-    top_rank_only: bool
+    dynamic_neighbor_pool: bool = False
+    easy_neighbor_pool_size: int = 3
+    hard_neighbor_pool_size: int = 10
+    difficulty_threshold: float = 0.8
+    top_rank_only: bool = False
 
 
 # -----------------------------------------------------------------------------
@@ -129,6 +129,7 @@ class EMA:
     def __init__(self, model: nn.Module, decay: float = 0.999) -> None:
         self.decay = float(decay)
         self.shadow: dict[str, torch.Tensor] = {}
+        self.backup: dict[str, torch.Tensor] = {}
         self._initialized = False
         self._model = model
         self.register()
@@ -152,12 +153,20 @@ class EMA:
                     self.shadow[name] = self.decay * self.shadow[name] + (1.0 - self.decay) * param.data
 
     def apply_to_model(self, model: nn.Module) -> None:
+        if self.backup:
+            raise RuntimeError("EMA weights are already applied; call restore() first")
         for name, param in model.named_parameters():
             if name in self.shadow:
+                self.backup[name] = param.data.clone()
                 param.data.copy_(self.shadow[name])
 
     def restore(self, model: nn.Module) -> None:
-        self.apply_to_model(model)
+        if not self.backup:
+            raise RuntimeError("No original model weights are available to restore")
+        for name, param in model.named_parameters():
+            if name in self.backup:
+                param.data.copy_(self.backup[name])
+        self.backup.clear()
 
 
 def seed_worker(worker_id: int) -> None:
@@ -1025,7 +1034,6 @@ def run_experiment(config: ExperimentConfig) -> None:
 
     num_classes = get_num_classes(config.dataset)
     model = build_model(config.model, num_classes=num_classes).to(device)
-    ema = EMA(model, decay=0.999)
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -1075,8 +1083,6 @@ def run_experiment(config: ExperimentConfig) -> None:
             mix_prob=effective_mix_prob,
             augmentation_rng=augmentation_rng,
         )
-        ema.update(model)
-
         val_loss, val_acc = evaluate(
             model=model,
             dataloader=val_loader,
@@ -1097,7 +1103,6 @@ def run_experiment(config: ExperimentConfig) -> None:
         if improved:
             best_val_acc = val_acc
             best_epoch = epoch
-            ema.apply_to_model(model)
 
             torch.save(
                 {
@@ -1109,7 +1114,6 @@ def run_experiment(config: ExperimentConfig) -> None:
                 },
                 checkpoint_path,
             )
-            model.load_state_dict(torch.load(checkpoint_path, map_location=device)["model_state_dict"])
 
         marker = " * Checkpoint - Best val_acc " if improved else ""
         print(
@@ -1165,7 +1169,15 @@ def parse_args() -> ExperimentConfig:
 
     parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
     parser.add_argument("--model", type=str, default="resnet50", choices=["resnet50", "vit"])
-    parser.add_argument("--k", type=int, default=20, choices=[5, 10, 20, 50, 100])
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=20,
+        help=(
+            "Labeled images per class. CIFAR-100 k=max is represented by 450 "
+            "because 50 images per class remain reserved for validation."
+        ),
+    )
     parser.add_argument("--subset-seed", type=int, default=0)
     parser.add_argument(
     '--augmentation',
@@ -1301,6 +1313,9 @@ def parse_args() -> ExperimentConfig:
     )
 
     args = parser.parse_args()
+
+    if args.k < 1:
+        parser.error("--k must be a positive integer")
 
     return ExperimentConfig(
         dataset=args.dataset,

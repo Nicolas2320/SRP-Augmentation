@@ -15,6 +15,16 @@ ENCODER_CHOICES = ["resnet18_imagenet", "resnet50_imagenet"]
 NEIGHBOR_MODE_CHOICES = ["class_aware", "class_agnostic", "different_label"]
 
 
+def get_device(requested: str) -> torch.device:
+    if requested != "auto":
+        return torch.device(requested)
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
 def load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -69,14 +79,18 @@ def build_neighbors(
     original_indices: torch.Tensor,
     mode: str,
     max_neighbors: int,
+    query_batch_size: int = 512,
 ) -> dict[str, Any]:
     if embeddings.ndim != 2:
         raise ValueError(f"Embeddings must be 2D, got shape {tuple(embeddings.shape)}")
     if embeddings.shape[0] != labels.numel() or labels.numel() != original_indices.numel():
         raise ValueError("Embeddings, labels, and original_indices must have matching lengths")
+    if query_batch_size < 1:
+        raise ValueError("query_batch_size must be at least 1")
 
     labels = labels.long()
-    original_indices = original_indices.long()
+    labels_cpu = labels.cpu()
+    original_indices = original_indices.long().cpu()
     num_samples = int(labels.numel())
     neighbor_count = effective_neighbor_count(labels, mode, max_neighbors)
     if neighbor_count < 1:
@@ -86,16 +100,37 @@ def build_neighbors(
         )
 
     normalized = F.normalize(embeddings.float(), dim=1)
-    similarities = normalized @ normalized.T
-    eligible = torch.ones((num_samples, num_samples), dtype=torch.bool)
-    eligible.fill_diagonal_(False)
-    if mode == "class_aware":
-        eligible &= labels[:, None] == labels[None, :]
-    elif mode == "different_label":
-        eligible &= labels[:, None] != labels[None, :]
+    value_batches: list[torch.Tensor] = []
+    position_batches: list[torch.Tensor] = []
 
-    masked_similarities = similarities.masked_fill(~eligible, float("-inf"))
-    values, neighbor_positions = torch.topk(masked_similarities, k=neighbor_count, dim=1)
+    # Avoid materializing an N x N similarity matrix. At CIFAR-100 k=450,
+    # N=45,000 and the dense matrix alone would require about 8.1 GB in
+    # float32, before masks and other intermediate tensors are included.
+    for start in range(0, num_samples, query_batch_size):
+        end = min(start + query_batch_size, num_samples)
+        similarities = normalized[start:end] @ normalized.T
+
+        local_rows = torch.arange(end - start, device=similarities.device)
+        global_rows = torch.arange(start, end, device=similarities.device)
+        similarities[local_rows, global_rows] = float("-inf")
+
+        if mode == "class_aware":
+            eligible = labels[start:end, None] == labels[None, :]
+            similarities.masked_fill_(~eligible, float("-inf"))
+        elif mode == "different_label":
+            eligible = labels[start:end, None] != labels[None, :]
+            similarities.masked_fill_(~eligible, float("-inf"))
+
+        batch_values, batch_positions = torch.topk(
+            similarities,
+            k=neighbor_count,
+            dim=1,
+        )
+        value_batches.append(batch_values.cpu())
+        position_batches.append(batch_positions.cpu())
+
+    values = torch.cat(value_batches, dim=0)
+    neighbor_positions = torch.cat(position_batches, dim=0)
     if not torch.isfinite(values).all():
         raise RuntimeError("At least one sample has fewer eligible neighbors than requested")
 
@@ -103,12 +138,13 @@ def build_neighbors(
         "mode": mode,
         "requested_max_neighbors": int(max_neighbors),
         "num_neighbors": int(neighbor_count),
+        "query_batch_size": int(query_batch_size),
         "similarities": values.float(),
         "neighbor_positions": neighbor_positions.long(),
         "neighbor_indices": original_indices[neighbor_positions].long(),
-        "neighbor_labels": labels[neighbor_positions].long(),
+        "neighbor_labels": labels_cpu[neighbor_positions].long(),
         "original_indices": original_indices.long(),
-        "labels": labels.long(),
+        "labels": labels_cpu.long(),
     }
 
 
@@ -119,6 +155,7 @@ def update_metadata(metadata_path: Path, mode: str, neighbor_path: Path, payload
         "path": str(neighbor_path),
         "requested_max_neighbors": int(payload["requested_max_neighbors"]),
         "num_neighbors": int(payload["num_neighbors"]),
+        "query_batch_size": int(payload["query_batch_size"]),
     }
     save_json(metadata_path, metadata)
 
@@ -133,12 +170,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
     parser.add_argument("--mode", choices=NEIGHBOR_MODE_CHOICES + ["both"], required=True)
     parser.add_argument("--max-neighbors", type=int, required=True)
+    parser.add_argument(
+        "--query-batch-size",
+        type=int,
+        default=512,
+        help="Number of anchor embeddings processed per similarity block.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="auto",
+        help="Similarity-computation device: auto, cpu, cuda, or another torch device.",
+    )
     parser.add_argument("--output-root", type=str, default="results/experiments/shared/neighbors")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    device = get_device(args.device)
     out_dir = output_dir(Path(args.output_root), args.dataset, args.k, args.subset_seed)
     embedding_path = out_dir / f"embeddings_{args.encoder}.pt"
     embedding_payload = load_embedding_payload(embedding_path)
@@ -153,11 +203,12 @@ def main() -> None:
     modes = ["class_aware", "class_agnostic"] if args.mode == "both" else [args.mode]
     for mode in modes:
         neighbor_payload = build_neighbors(
-            embeddings=embedding_payload["embeddings"],
-            labels=embedding_payload["labels"],
+            embeddings=embedding_payload["embeddings"].to(device),
+            labels=embedding_payload["labels"].to(device),
             original_indices=embedding_payload["original_indices"],
             mode=mode,
             max_neighbors=args.max_neighbors,
+            query_batch_size=args.query_batch_size,
         )
         neighbor_payload.update(
             {
@@ -174,7 +225,8 @@ def main() -> None:
         update_metadata(out_dir / "metadata.json", mode, neighbor_path, neighbor_payload)
         print(
             f"Saved {mode} neighbors: {neighbor_path} "
-            f"(requested={args.max_neighbors}, actual={neighbor_payload['num_neighbors']})"
+            f"(requested={args.max_neighbors}, actual={neighbor_payload['num_neighbors']}, "
+            f"device={device})"
         )
 
 

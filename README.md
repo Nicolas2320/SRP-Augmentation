@@ -131,6 +131,11 @@ The split generator first creates a fixed validation split, then samples k-shot
 training subsets from the remaining training pool. This prevents overlap between
 training and validation indices.
 
+The current split set includes `k=5`, `10`, `20`, `50`, `100`, `200`, `300`,
+and the full post-validation training pool. For CIFAR-100 this maximum is
+`k=450`; for CIFAR-10 it is `k=4500`. The maximum split is saved once with
+`subset_seed=0` because it contains every available training-pool image.
+
 ---
 
 ## Training
@@ -163,6 +168,11 @@ Supported augmentations:
 - `mixup`
 - `cutmix`
 - `augmix`
+- `simmixup`
+- `simcutmix`
+
+For the CIFAR-100 `k=max` sanity-check commands requested after supervisor
+feedback, see `docs/kmax_experiment_commands.md`.
 
 ---
 
