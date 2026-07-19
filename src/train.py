@@ -961,7 +961,7 @@ def experiment_output_dir(config: ExperimentConfig) -> Path:
 
 
 def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) -> str:
-    """Format sampled SimMixUp neighbor-rank counts for epoch logging."""
+    """Format the configured guided-neighbor rank window for epoch logging."""
 
     rank_counter = getattr(train_dataset, "sampled_neighbor_rank_counts", None)
     if not callable(rank_counter):
@@ -976,29 +976,9 @@ def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) 
             f"neighbor_rank_window={rank_start}-{rank_end} disabled"
         )
 
-    counts = rank_counter()
-    total = int(counts.sum().item())
-    if total == 0:
-        return (
-            f" | neighbor_k={neighbor_k} | "
-            f"neighbor_rank_window={rank_start}-{rank_end} none"
-        )
-
-    ranks = torch.arange(rank_start, rank_end + 1, dtype=torch.float32)
-    mean_rank = float((counts.float() * ranks).sum().item() / total)
-    nonzero = torch.nonzero(counts, as_tuple=False).flatten()
-    min_rank = int(nonzero[0].item()) + rank_start
-    max_rank = int(nonzero[-1].item()) + rank_start
-    count_text = ",".join(
-        f"{rank}:{int(count)}"
-        for rank, count in enumerate(counts.tolist(), start=rank_start)
-    )
-
     return (
         f" | neighbor_k={neighbor_k} | "
-        f"neighbor_rank_window={rank_start}-{rank_end} | "
-        f"sampled_rank={min_rank}-{max_rank} mean={mean_rank:.2f} | "
-        f"rank_counts={count_text}"
+        f"neighbor_rank_window={rank_start}-{rank_end}"
     )
 
 

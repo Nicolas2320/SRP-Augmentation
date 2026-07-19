@@ -17,9 +17,12 @@
   "validation_overlap_count": 0,
   "neighbors": {
     "class_agnostic": {
-      "path": "results/experiments/shared/neighbors/final_stage_v1/cifar100/k20_seed0/neighbors_class_agnostic_K60.pt",
-      "requested_max_neighbors": 60,
-      "num_neighbors": 60
+      "path": "results\\experiments\\shared\\neighbors\\final_stage_v1\\cifar100\\k20_seed0\\neighbors_class_agnostic_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 4,
+      "search_device": "cuda"
     }
   }
 }
