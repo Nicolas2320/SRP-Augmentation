@@ -172,6 +172,28 @@ Full post-validation CIFAR-100 sanity check with CutMix:
 python -u src\train.py --dataset cifar100 --model resnet50 --k 450 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
 
+To transfer the best k=100 SimCutMix configuration to the successful 50-epoch
+k=450 recipe, first compute ImageNet ResNet50 embeddings and build the 40 exact
+nearest neighbors. Neighbor search is blockwise so it does not allocate the
+full 45,000-by-45,000 similarity matrix:
+
+```powershell
+python -u src\proposal\compute_embeddings.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --batch-size 64 --num-workers 2 --device auto
+python -u src\proposal\build_neighbors.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40 --query-batch-size 512 --device auto
+python -u src\proposal\inspect_neighbors.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40
+```
+
+Then run SimCutMix using the original best rank window (ranks 21-40) with the
+same optimizer, spatial augmentation, and schedule as the k=450 CutMix run:
+
+```powershell
+python -u src\train.py --dataset cifar100 --model resnet50 --k 450 --subset-seed 0 --train-seed 0 --augmentation simcutmix --mixup-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k450_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
+```
+
+If neighbor construction runs out of GPU memory, reduce
+`--query-batch-size 512` to `256` or `128`. This does not change the exact
+neighbors; it only uses smaller search blocks.
+
 If batch size 128 does not fit in GPU memory, use batch size 64 and learning
 rate 0.05 as a proportional starting point.
 

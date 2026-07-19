@@ -14,6 +14,7 @@ from src.train import (
     build_lr_scheduler,
     build_optimizer,
     experiment_output_dir,
+    format_neighbor_rank_summary,
     get_transforms,
 )
 
@@ -105,6 +106,24 @@ class StandardCifarRecipeTests(unittest.TestCase):
         self.assertIn("standard_cifar_recipe", output_dir.parts)
         self.assertTrue(any("bs128" in part for part in output_dir.parts))
         self.assertTrue(any("cp0p5" in part for part in output_dir.parts))
+
+    def test_neighbor_rank_log_omits_per_rank_statistics(self):
+        class GuidedDataset:
+            neighbor_indices = torch.empty((4, 20), dtype=torch.long)
+            neighbor_rank_start = 21
+
+            @staticmethod
+            def sampled_neighbor_rank_counts():
+                raise AssertionError("rank counts should not be computed for logging")
+
+        summary = format_neighbor_rank_summary(GuidedDataset(), effective_mix_prob=1.0)
+
+        self.assertEqual(
+            summary,
+            " | neighbor_k=20 | neighbor_rank_window=21-40",
+        )
+        self.assertNotIn("mean=", summary)
+        self.assertNotIn("rank_counts=", summary)
 
 
 if __name__ == "__main__":
