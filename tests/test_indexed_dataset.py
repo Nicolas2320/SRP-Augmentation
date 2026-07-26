@@ -286,18 +286,19 @@ class IndexedDatasetTests(unittest.TestCase):
             )
 
     def test_dynamic_neighbor_pool_uses_smaller_pool_for_easy_samples(self):
+        similarities = [0.95, 0.82, 0.74, 0.40, 0.30, 0.25]
         payload = {
-            "mode": "class_aware",
-            "original_indices": torch.tensor([10, 11, 12]),
-            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
-            "similarities": torch.tensor([[0.95, 0.82, 0.74, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05]]),
+            "mode": "class_agnostic",
+            "original_indices": torch.tensor(self.train_indices),
+            "neighbor_indices": torch.tensor([self.train_indices] * len(self.train_indices)),
+            "similarities": torch.tensor([similarities] * len(self.train_indices)),
         }
 
         dataset = GuidedPairDataset(
             self.base_dataset,
-            [10],
+            self.train_indices,
             payload,
-            mode="class_aware",
+            mode="class_agnostic",
             seed=0,
             pair_sampling="weighted",
             dynamic_neighbor_pool=True,
@@ -309,18 +310,19 @@ class IndexedDatasetTests(unittest.TestCase):
         self.assertLess(dataset._sample_neighbor_slot(0, 0), 3)
 
     def test_dynamic_neighbor_pool_uses_larger_pool_for_hard_samples(self):
+        similarities = [0.35, 0.32, 0.30, 0.28, 0.25, 0.20]
         payload = {
-            "mode": "class_aware",
-            "original_indices": torch.tensor([10, 11, 12]),
-            "neighbor_indices": torch.tensor([[11, 12, 13, 14, 15, 16, 17, 18, 19, 20]]),
-            "similarities": torch.tensor([[0.35, 0.32, 0.30, 0.28, 0.25, 0.20, 0.18, 0.15, 0.10, 0.05]]),
+            "mode": "class_agnostic",
+            "original_indices": torch.tensor(self.train_indices),
+            "neighbor_indices": torch.tensor([self.train_indices] * len(self.train_indices)),
+            "similarities": torch.tensor([similarities] * len(self.train_indices)),
         }
 
         dataset = GuidedPairDataset(
             self.base_dataset,
-            [10],
+            self.train_indices,
             payload,
-            mode="class_aware",
+            mode="class_agnostic",
             seed=0,
             pair_sampling="weighted",
             dynamic_neighbor_pool=True,

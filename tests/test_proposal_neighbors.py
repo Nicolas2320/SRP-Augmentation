@@ -94,6 +94,59 @@ class ProposalNeighborTests(unittest.TestCase):
         self.assertEqual(effective_neighbor_count(self.labels, "class_agnostic", 10), 5)
         self.assertEqual(effective_neighbor_count(self.labels, "different_label", 10), 3)
 
+    def test_blockwise_neighbors_match_single_block_results(self):
+        original_embeddings = self.embeddings.clone()
+
+        for mode in ("class_aware", "class_agnostic", "different_label"):
+            with self.subTest(mode=mode):
+                single_block = build_neighbors(
+                    self.embeddings,
+                    self.labels,
+                    self.indices,
+                    mode=mode,
+                    max_neighbors=2,
+                    query_batch_size=len(self.embeddings),
+                    device="cpu",
+                )
+                blockwise = build_neighbors(
+                    self.embeddings,
+                    self.labels,
+                    self.indices,
+                    mode=mode,
+                    max_neighbors=2,
+                    query_batch_size=2,
+                    device="cpu",
+                )
+
+                self.assertTrue(
+                    torch.equal(
+                        blockwise["neighbor_positions"],
+                        single_block["neighbor_positions"],
+                    )
+                )
+                self.assertTrue(
+                    torch.allclose(
+                        blockwise["similarities"],
+                        single_block["similarities"],
+                    )
+                )
+                self.assertEqual(blockwise["query_batch_size"], 2)
+                self.assertEqual(blockwise["num_query_blocks"], 3)
+                self.assertEqual(blockwise["search_device"], "cpu")
+
+        self.assertTrue(torch.equal(self.embeddings, original_embeddings))
+
+    def test_blockwise_neighbors_reject_invalid_query_batch_size(self):
+        with self.assertRaisesRegex(ValueError, "query-batch-size"):
+            build_neighbors(
+                self.embeddings,
+                self.labels,
+                self.indices,
+                mode="class_agnostic",
+                max_neighbors=2,
+                query_batch_size=0,
+            )
+
     def test_embedding_validation_checks_split_and_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
