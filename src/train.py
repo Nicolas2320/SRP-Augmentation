@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import math
 import random
@@ -892,72 +893,45 @@ def neighbor_source_k_from_path(neighbor_path: str | None, fallback: int) -> str
     return str(fallback)
 
 
-def guided_output_parts(config: ExperimentConfig) -> list[str]:
-    """Build canonical folder components for guided augmentation settings."""
+def experiment_config_id(config: ExperimentConfig) -> str:
+    """Return a short stable ID for the complete scientific configuration."""
+    identity = asdict(config)
+    for key in ("data_root", "split_root", "output_root", "num_workers"):
+        identity.pop(key, None)
+    for key in ("neighbor_path", "anchor_score_path"):
+        if identity.get(key):
+            identity[key] = str(identity[key]).replace("\\", "/")
+    payload = json.dumps(identity, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+def guided_variant_name(config: ExperimentConfig) -> str:
+    """Build the readable guided-method component of an output path."""
     rank_start = int(config.neighbor_rank_start)
     rank_end = rank_start + int(config.neighbor_k) - 1
     source_k = neighbor_source_k_from_path(config.neighbor_path, config.neighbor_k)
-    alpha = format_float_for_filename(config.mixup_alpha)
-    mix_prob = format_float_for_filename(config.mix_prob)
-
-    parts = [
-        f"{filename_component(config.guided_mode)}_K{source_k}",
-        f"r{rank_start}-{rank_end}",
-        (
-            f"{filename_component(config.pair_sampling)}_"
-            f"nk{config.neighbor_k}_a{alpha}_"
-            f"mp{mix_prob}_w{config.mix_warmup_epochs}"
-        ),
-    ]
-    if config.anchor_score_path is not None:
-        top_pct = format_float_for_filename(config.anchor_top_pct)
-        score_power = format_float_for_filename(config.anchor_score_power)
-        parts.append(
-            f"{filename_component(config.anchor_selection)}_"
-            f"top{top_pct}_pow{score_power}"
-        )
-    return parts
+    return (
+        f"{filename_component(config.guided_mode)}_"
+        f"k{source_k}_r{rank_start}-{rank_end}"
+    )
 
 
 def experiment_output_dir(config: ExperimentConfig) -> Path:
     """Return the canonical folder for one experiment run."""
-    milestones = "-".join(str(epoch) for epoch in config.lr_milestones)
-    optimizer_part = filename_component(config.optimizer)
-    if config.optimizer == "sgd":
-        optimizer_part += (
-            f"_mom{format_float_for_filename(config.momentum)}"
-            f"_{'nesterov' if config.nesterov else 'no_nesterov'}"
-        )
-    recipe_part = (
-        f"{optimizer_part}_bs{config.batch_size}_"
-        f"lr{format_float_for_filename(config.lr)}_"
-        f"wd{format_float_for_filename(config.weight_decay)}_"
-        f"m{milestones}_g{format_float_for_filename(config.lr_gamma)}"
-    )
-    if config.augmentation == "cutmix":
-        recipe_part += f"_cp{format_float_for_filename(config.cutmix_prob)}"
-
     base = (
         Path(config.output_root)
         / filename_component(config.dataset)
         / filename_component(config.model)
         / f"k{config.k}"
-        / "standard_cifar_recipe"
-        / recipe_part
+        / filename_component(config.augmentation)
     )
-    run = f"e{config.epochs}_s{config.subset_seed}_t{config.train_seed}"
-
-    if config.augmentation in {"none", "mixup", "cutmix", "augmix"}:
-        return base / "baselines" / filename_component(config.augmentation) / run
-
-    if config.augmentation == "simmixup":
-        group = "anchor_gated" if config.anchor_score_path is not None else "ungated"
-        return base / "simmixup" / group / Path(*guided_output_parts(config)) / run
-
-    if config.augmentation == "simcutmix":
-        return base / "simcutmix" / Path(*guided_output_parts(config)) / run
-
-    return base / filename_component(config.augmentation) / run
+    run = (
+        f"e{config.epochs}_s{config.subset_seed}_t{config.train_seed}_"
+        f"c{experiment_config_id(config)}"
+    )
+    if config.augmentation in {"simmixup", "simcutmix"}:
+        return base / guided_variant_name(config) / run
+    return base / run
 
 
 def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) -> str:
@@ -1057,7 +1031,7 @@ def build_lr_scheduler(
     config: ExperimentConfig,
     optimizer: torch.optim.Optimizer,
 ) -> torch.optim.lr_scheduler.MultiStepLR:
-    """Build milestone decay for the 100-epoch standard CIFAR recipe."""
+    """Build the configured milestone learning-rate decay."""
     return torch.optim.lr_scheduler.MultiStepLR(
         optimizer,
         milestones=list(config.lr_milestones),
@@ -1203,6 +1177,7 @@ def run_experiment(config: ExperimentConfig) -> None:
 
     summary = {
         **asdict(config),
+        "config_id": experiment_config_id(config),
         "num_train": num_train,
         "num_val": num_val,
         "num_test": num_test,

@@ -1,81 +1,132 @@
 # SRP-Augmentation Project Status
 
-Last updated: 2026-07-09
+Last verified: 2026-07-26
 
 ## Current Stage
 
-The repository is in the focused experimental-comparison stage. The training
-pipeline, standard augmentation baselines, similarity-guided methods, neighbor
-construction, and anchor-score selection are implemented.
+The repository is in the focused experimental-comparison stage. The data,
+training, standard augmentation, similarity-guided pairing, neighbor
+construction, anchor scoring, and result-writing pipelines are implemented and
+covered by tests.
 
-Implemented pieces:
+The immediate research goal is to complete the scheduled-training baseline
+matrix, preselect final configurations, and validate them across multiple
+seeds. Historical no-LR-schedule experiments have been separated from the
+active evidence set.
 
-- CIFAR-10 and CIFAR-100 k-shot splits with fixed validation data.
+For setup and system orientation, use the
+[project README](../README.md) and [architecture guide](architecture.md).
+
+## Sources of Truth
+
+| Source | Owns |
+|---|---|
+| `README.md` | Setup, entry points, and first-run instructions. |
+| `docs/architecture.md` | System components and data flow. |
+| `docs/reproducibility.md` | Reproduction requirements and limitations. |
+| `docs/project_status.md` | Current work, known gaps, and next tasks. |
+| `notes/current_results_summary.md` | Active-result interpretation. |
+| `results/experiments/README.md` | Experiment-folder conventions. |
+| `results/experiments/manifest.csv` | Generated sortable index of active run summaries. |
+
+The manifest is derived data. Regenerate it after adding or moving canonical
+summaries rather than editing it manually.
+
+## Implemented Scope
+
+- CIFAR-10 and CIFAR-100 k-shot splits with a fixed validation set.
 - ResNet50 and ViT training through `src/train.py`.
-- Baselines: none, MixUp, CutMix, and AugMix.
-- Proposed variants: SimMixUp and SimCutMix.
-- Similarity-guided pairing with class-aware/class-agnostic neighbors, rank
-  windows, mix probability, warmup, and anchor-score gating.
-- Canonical experiment outputs under `results/experiments/<dataset>/<model>/k<k>/<method>/...`.
+- Standard methods: none, MixUp, CutMix, and AugMix.
+- Proposed methods: SimMixUp and SimCutMix.
+- Class-aware, class-agnostic, and different-label neighbor modes.
+- Neighbor rank windows, uniform or weighted pairing, mix probability, and
+  warmup.
+- Optional anchor-score gating and dynamic neighbor pools.
+- Canonical metrics, summaries, best-validation checkpoints, manifest
+  generation, artifact auditing, and comparison plots.
 
-## Canonical References
+## Active Evidence Inventory
 
-Use these files as the current source of truth:
+The canonical `results/experiments/` tree contains:
 
-- Detailed result narrative: `notes/experiment_results_summary_v1.md`
-- Experiment artifact folder: `results/experiments/`
-- Sortable run index: `results/experiments/manifest.csv`
-- Experiment folder map: `results/experiments/README.md`
+- 20 complete `summary.json` and `metrics.csv` pairs;
+- 8 ResNet50 scheduled-training runs and 12 ViT baseline runs;
+- 6 k=100, 5 k=20, 5 k=50, and 4 k=450 runs;
+- zero incomplete run folders or unmatched checkpoints requiring retention
+  review.
 
-Older duplicate notes and baseline-only summaries were removed to keep the repo
-clean.
+The generated manifest contains 20 unique experiment IDs and indexes all
+active summaries.
 
-## Current Evidence
+On 2026-07-26, 46 earlier ResNet50 runs without the current learning-rate
+schedule, including K100 ablations and legacy runs, were moved to:
 
-The local experiment catalog contains 56 complete summary/CSV metric pairs after
-deduplicating two equivalent reruns. Three non-exact reruns are preserved
-under `legacy/` for provenance. Most results are CIFAR-100 with `subset_seed=0`
-and `train_seed=0`, so they are still preliminary single-seed evidence.
+```text
+../SRP-old_experiments/historical_no_lr_schedule/
+```
 
-Main observations:
+The sibling archive is intentionally outside the Git repository. It contains a
+46-run manifest, the original 66-run manifest, documentation snapshots, 52
+locally available `.pt` payloads, and neighbor support used only by archived
+experiments. The active cleanup ledger records the move and destination.
 
-- CutMix remains the strongest standard baseline in the 100-epoch baseline grid.
-- The best guided result so far is SimCutMix on CIFAR-100, ResNet50, k=100,
-  class-agnostic K40 ranks 21-40, with `40.02%` test accuracy.
-- The repeated class-agnostic SimCutMix ranks 1-20 setup remains promising at
-  `38.65%` test accuracy.
-- The k=20 and k=50 same-budget SimCutMix comparisons are both positive:
-  `16.49%` vs `13.36%` CutMix at k=20, and `28.04%` vs `26.07%` CutMix at k=50.
-- Anchor-gated SimMixUp did not improve over ungated guided mixing in the tested
-  configurations.
-- Similarity-guided methods need multi-seed validation before making final
+## Current Scientific Evidence
+
+- Scheduled ResNet50 SimCutMix reaches `46.16%` test accuracy at k=100,
+  compared with `43.20%` for scheduled CutMix.
+- At k=450, scheduled CutMix reaches `72.70%`, compared with `71.60%` for
+  SimCutMix. This negative proposal result remains part of the active evidence.
+- The k=20 and k=50 SimCutMix results are `16.40%` and `28.65%`, respectively,
+  but matching scheduled baselines have not yet been run.
+- CutMix is the strongest recorded ViT baseline at k=20, k=50, and k=100.
+- Similarity-guided methods still require multi-seed validation before final
   claims.
 
-## Known Gaps
+See [Current Experiment Results](../notes/current_results_summary.md) for the
+active tables and missing comparison matrix.
 
-- The k=20 local rerun and the teammate-provided k=20 SimCutMix summary disagree:
-  the local canonical file reports `16.49%` test accuracy, while the teammate
-  summary reports `18.14%`.
-- The k=50 MixUp result needs reconciliation: the local canonical summary
-  reports `24.08%` test accuracy, while the teammate-provided result reports
-  `25.16%`.
-- Eight historical summaries reference checkpoints that are not present locally,
-  and one class-aware SimMixUp summary references a missing K20 neighbor file.
-  The metric CSV/JSON pairs are present, but exact restoration is incomplete for
-  those historical runs.
+## Known Research Gaps
+
+- Scheduled none, MixUp, CutMix, and optionally AugMix baselines are missing at
+  k=20 and k=50.
+- Scheduled none, MixUp, and optionally AugMix baselines are missing at k=100.
+- K450 AugMix is missing if AugMix remains in the final baseline set.
 - Multi-seed aggregation is still missing.
 
-## Next Tasks
+## Known Reproducibility and Artifact Gaps
 
-1. Reconcile the k=20 SimCutMix and k=50 MixUp discrepancies and decide which
-   results are authoritative.
-2. Build final same-budget tables for k=20, k=50, and k=100.
-3. Run multi-seed aggregation for the final selected settings.
-4. Generate final plots from the centralized experiment folder.
+- Two active ViT AugMix summaries, at k=20 and k=50, reference checkpoints that
+  are not present locally. Their metrics and summaries are complete.
+- Large `.pt` artifacts are ignored by Git, so a fresh clone does not include
+  local checkpoints, embeddings, or neighbor payloads.
+- Existing summaries record experiment configuration but not the Git commit,
+  Python version, PyTorch/CUDA versions, or GPU.
+- `requirements.txt` is an install specification rather than an exact
+  environment lock.
+- Twenty-four ignored smoke, failed, incomplete, superseded, or unmatched
+  checkpoints were permanently deleted in two reviewed batches on 2026-07-26.
+  Their paths, sizes, and hashes are retained in
+  `results/experiments/artifact_cleanup_log.json`.
+- The current artifact audit reports zero retention-review candidates and zero
+  noncanonical result locations.
+
+## Next Research Tasks
+
+1. Complete the scheduled-training baseline matrix.
+2. Preselect one final proposal configuration per comparison budget using
+   validation evidence rather than test-score cherry-picking.
+3. Run multiple subset and training seeds.
+4. Generate final aggregate tables and figures.
+
+## Next Repository-Maintenance Tasks
+
+1. Decide which final-run checkpoints need durable external storage.
+2. Introduce a locked experiment environment and record environment metadata
+   in future summaries.
 
 ## Bottom Line
 
-The experimental stage now has a clean local single-seed comparison for k=20,
-k=50, and k=100, but external-result discrepancies and missing multi-seed
-aggregation should be resolved before making final claims about the proposed
-method.
+The active result tree now contains only scheduled ResNet50 comparisons and the
+retained ViT baseline grid. Final scientific claims depend on completing
+matched baselines and running multi-seed comparisons. Environment capture
+remains a limitation of exact reproduction.

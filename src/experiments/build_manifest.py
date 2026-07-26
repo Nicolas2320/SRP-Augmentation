@@ -15,6 +15,7 @@ from typing import Any
 
 MANIFEST_COLUMNS = [
     "experiment_id",
+    "config_id",
     "collection",
     "dataset",
     "model",
@@ -167,6 +168,7 @@ def build_rows(results_root: Path, repo_root: Path) -> list[dict[str, str]]:
 
         row = {
             "experiment_id": experiment_id(summary_path, results_root),
+            "config_id": str(summary.get("config_id", "")),
             "collection": collection_name(summary_path, results_root),
             "dataset": str(summary.get("dataset", "")),
             "model": str(summary.get("model", "")),

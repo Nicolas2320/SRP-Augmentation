@@ -1,201 +1,142 @@
 # SRP-Augmentation
 
-Image augmentation experiments for small-data image classification.
+SRP-Augmentation is a research codebase for comparing image augmentation
+methods in low-data image classification. It supports controlled CIFAR-10 and
+CIFAR-100 experiments with reproducible k-shot subsets, CIFAR-adapted ResNet50
+and ViT models, standard augmentation baselines, and similarity-guided mixing.
 
-This repository contains the implementation for our Student Research Project
-(SRP) at the University of Hildesheim. The project studies how different image
-augmentation methods affect classification performance when only a limited
-number of labeled training samples are available.
+The project is a Student Research Project at the University of Hildesheim.
 
-The current focus is on controlled low-data experiments using CIFAR-10,
-CIFAR-100, ResNet50, ViT, and reproducible k-shot training subsets.
+## At a Glance
 
----
+**Research question:** Which augmentation strategies improve classification
+most reliably when only a small number of labeled examples are available, and
+can similarity-guided mixing improve on standard baselines?
 
-## Project Motivation
+**Implemented methods:**
 
-Deep learning models usually require large labeled datasets. However, in many
-real-world domains, labeled data can be expensive, limited, or difficult to
-collect. In these low-data settings, models can overfit easily and fail to
-generalize well.
+| Family | Methods |
+|---|---|
+| Standard | None, MixUp, CutMix, AugMix |
+| Proposed | SimMixUp, SimCutMix |
+| Optional guided strategies | Class-aware, class-agnostic, different-label, anchor-gated, and dynamic neighbor pools |
 
-Data augmentation is a common strategy to improve generalization by increasing
-training diversity without collecting new labels. This project compares standard
-augmentation baselines and later aims to develop a small-data-oriented
-augmentation method.
+**Current stage:** The training and guided-pairing pipelines are implemented.
+The project is comparing final configurations and still needs multi-seed
+validation before making final claims. See
+[Project Status](docs/project_status.md) for the current evidence and open
+questions.
 
----
+## Start Here
 
-## Research Question
+New collaborators should read these files in order:
 
-Which image augmentation strategies improve classification performance most
-reliably in low-data image classification settings, and can a
-small-data-targeted augmentation variant outperform or complement standard
-augmentation baselines?
+1. This README for setup and first commands.
+2. [Architecture](docs/architecture.md) for the data and training flow.
+3. [Reproducibility](docs/reproducibility.md) before running experiments.
+4. [Project Status](docs/project_status.md) for current results and known gaps.
+5. [Current Results Summary](notes/current_results_summary.md) for the
+   detailed scientific narrative.
 
----
-
-## Current Project Status
-
-### Implemented
-
-- Reproducible CIFAR-10 and CIFAR-100 k-shot split generation
-- Fixed validation split
-- ResNet50 adapted for CIFAR-size images
-- ViT adapted for CIFAR-size images
-- Unified training entry point in `src/train.py`
-- No-augmentation baseline
-- MixUp augmentation
-- CutMix augmentation
-- AugMix augmentation
-- Seeded augmentation, DataLoader, PyTorch, and CUDA/cuDNN behavior where possible
-- Metrics saved as CSV files
-- Experiment summaries saved as JSON files
-- Best validation checkpoint saving
-- Final test evaluation using the best validation checkpoint
-- Plot generation from saved metrics
-
-### In Progress
-
-- Final comparison tables and plots
-- Multi-seed result aggregation
-- First presentation slides
-
----
+The original project proposal is available at
+[`docs/Proposal_SRP.pdf`](docs/Proposal_SRP.pdf).
 
 ## Repository Structure
 
 ```text
 SRP-Augmentation/
-|
-|-- data/
-|   |-- raw/                    # Local CIFAR downloads, ignored by Git
-|   `-- splits/                 # Reproducible k-shot split files
-|
-|-- notebooks/                  # Exploratory notebooks
-|-- notes/                      # Project notes and documentation
-|
-|-- results/
-|   `-- experiments/            # Central experiment outputs and manifest
-|       |-- manifest.csv         # Index of local experiment summaries
-|       |-- cifar100/            # dataset/model/k/method experiment runs
-|       |   |-- resnet50/
-|       |   `-- vit/
-|       `-- shared/              # Shared neighbors, anchor scores, figures
-|
-|-- src/
-|   |-- augmentations/
-|   |   |-- mixup.py
-|   |   |-- cutmix.py
-|   |   `-- augmix.py
-|   |
-|   |-- data/
-|   |   `-- make_splits.py
-|   |
-|   |-- graphs/
-|   |   `-- plot_graphs.py
-|   |
-|   |-- models/
-|   |   |-- resnet.py
-|   |   `-- vit.py
-|   |
-|   `-- train.py
-|
-|-- requirements.txt
-`-- README.md
+├── data/
+│   ├── raw/                    # Local CIFAR downloads; ignored by Git
+│   └── splits/                 # Committed validation and k-shot indices
+├── docs/
+│   ├── architecture.md         # System and experiment flow
+│   ├── project_status.md       # Current stage, evidence, and gaps
+│   ├── reproducibility.md      # Reproduction checklist and limitations
+│   └── Proposal_SRP.pdf        # Original research proposal
+├── notebooks/                  # Exploratory and visual validation notebooks
+├── notes/
+│   └── current_results_summary.md
+├── results/
+│   └── experiments/            # Canonical run records and shared artifacts
+├── src/
+│   ├── augmentations/          # MixUp, CutMix, AugMix, SimMixUp, SimCutMix
+│   ├── data/                   # Split generation and indexed datasets
+│   ├── experiments/            # Manifest generation
+│   ├── graphs/                 # Result plotting
+│   ├── models/                 # CIFAR ResNet50 and ViT
+│   ├── proposal/               # Embeddings, neighbors, inspection, scoring
+│   └── train.py                # Unified experiment entry point
+├── tests/                      # Unit and small integration tests
+├── requirements.txt
+└── README.md
 ```
 
----
+`src/proposal/` is the implementation area for the proposed
+similarity-guided method. It is not an abandoned prototype.
 
 ## Setup
 
-```bash
-pip install -r requirements.txt
+Run commands from the repository root.
+
+### 1. Create and activate a virtual environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-The requirements use compatible version ranges instead of exact pins. This keeps
-the project reproducible within the tested dependency family while still
-allowing patch updates.
+### 2. Install dependencies
 
----
+```powershell
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+The current requirements select CUDA 12.8 builds of PyTorch and TorchVision.
+They are an installation specification rather than a fully locked research
+environment. Read [Reproducibility](docs/reproducibility.md) before producing
+results intended for the final report.
+
+### 3. Run the tests
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+The test suite does not download CIFAR or launch a full training run.
 
 ## Data Splits
 
-Generate CIFAR-10 and CIFAR-100 splits with:
+The committed files under `data/splits/` are the authoritative experiment
+subsets. They contain original CIFAR training-set indices, not image data.
 
-```bash
-python src/data/make_splits.py
-```
+Each dataset has:
 
-The split generator first creates a fixed validation split, then samples k-shot
-training subsets from the remaining training pool. This prevents overlap between
-training and validation indices.
+- one fixed validation split;
+- k-shot training subsets for seeds 0, 1, and 2;
+- one maximum post-validation training subset at seed 0.
 
-The generated CIFAR-100 maximum split is `k=450`: 450 images per class for
-training and 50 images per class for validation. The maximum split is generated
-only for `subset_seed=0` because it contains the complete post-validation pool.
+For CIFAR-100, the maximum setting is `k=450`: 450 training images and 50
+validation images per class.
 
----
-
-## Training
-
-Example run:
-
-```bash
-python src/train.py \
-  --dataset cifar100 \
-  --model resnet50 \
-  --k 20 \
-  --subset-seed 0 \
-  --augmentation cutmix \
-  --epochs 100
-```
-
-The default training configuration follows a 100-epoch CIFAR-style recipe:
-
-- 32x32 CIFAR-style model input
-- random crop with 4 pixels of padding and random horizontal flip
-- SGD with Nesterov momentum 0.9
-- initial learning rate 0.1
-- learning-rate multiplier 0.2 after epochs 30, 60, and 80
-- weight decay 0.0005
-- batch size 128
-- CutMix probability 0.5
-
-The spatial crop and flip are applied to every training method. Therefore,
-`--augmentation none` means no additional mixing method; it still uses the
-standard CIFAR spatial augmentation.
-
-Full post-validation CIFAR-100 sanity check with CutMix:
+Existing experiments should use the committed splits. To intentionally
+regenerate the full split collection:
 
 ```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 450 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
+python src\data\make_splits.py
 ```
 
-To transfer the best k=100 SimCutMix configuration to the successful 50-epoch
-k=450 recipe, first compute ImageNet ResNet50 embeddings and build the 40 exact
-nearest neighbors. Neighbor search is blockwise so it does not allocate the
-full 45,000-by-45,000 similarity matrix:
+TorchVision downloads missing CIFAR data into `data/raw/`. That directory is
+ignored by Git.
+
+## Run a Standard Experiment
+
+The unified entry point is `src/train.py`. This example runs a CIFAR-100
+ResNet50 CutMix experiment:
 
 ```powershell
-python -u src\proposal\compute_embeddings.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --batch-size 64 --num-workers 2 --device auto
-python -u src\proposal\build_neighbors.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40 --query-batch-size 512 --device auto
-python -u src\proposal\inspect_neighbors.py --dataset cifar100 --k 450 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40
+python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
-
-Then run SimCutMix using the original best rank window (ranks 21-40) with the
-same optimizer, spatial augmentation, and schedule as the k=450 CutMix run:
-
-```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 450 --subset-seed 0 --train-seed 0 --augmentation simcutmix --mixup-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k450_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
-```
-
-If neighbor construction runs out of GPU memory, reduce
-`--query-batch-size 512` to `256` or `128`. This does not change the exact
-neighbors; it only uses smaller search blocks.
-
-If batch size 128 does not fit in GPU memory, use batch size 64 and learning
-rate 0.05 as a proportional starting point.
 
 Supported datasets:
 
@@ -213,45 +154,129 @@ Supported augmentations:
 - `mixup`
 - `cutmix`
 - `augmix`
+- `simmixup`
+- `simcutmix`
 
----
+Every training method starts with random crop and horizontal flip. Therefore,
+`--augmentation none` means no additional mixing method; spatial augmentation
+is still active.
 
-## Reproducibility
+Use `python src\train.py --help` for the complete option list.
 
-Training uses `--train-seed` to seed Python, NumPy, PyTorch, DataLoader shuffling,
-DataLoader workers, augmentation RNGs, and CUDA/cuDNN deterministic behavior
-where possible.
+## Run a Similarity-Guided Experiment
 
-Some GPU operations can still vary slightly depending on hardware, driver,
-PyTorch version, and CUDA backend behavior. For reporting results, compare
-multiple `subset-seed` and `train-seed` values rather than relying on a single
-run.
+SimMixUp and SimCutMix select partners from precomputed nearest-neighbor sets.
+The minimum workflow has three stages.
 
----
+### 1. Compute embeddings
 
-## Dataset Downloading
+```powershell
+python -u src\proposal\compute_embeddings.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --batch-size 64 --num-workers 2 --device auto
+```
 
-The training and split scripts currently use `download=True` for torchvision
-CIFAR datasets. This means:
+### 2. Build and inspect neighbors
 
-- If the dataset is missing in `data/raw`, torchvision downloads it.
-- If the dataset already exists, torchvision reuses it.
+```powershell
+python -u src\proposal\build_neighbors.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40 --query-batch-size 512 --device auto
+python -u src\proposal\inspect_neighbors.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40
+```
 
-Changing this to `download=False` means:
+Neighbor search is exact and blockwise. Reducing `--query-batch-size` lowers
+memory use without changing the neighbor result.
 
-- Runs become stricter and cluster-friendly.
-- The dataset must already exist in `data/raw`.
-- If the dataset is missing, the script fails immediately instead of downloading.
+### 3. Train with the neighbor file
 
-For local development, `download=True` is convenient. For offline or cluster of the University.
-runs, `download=False` is usually better after the data has been staged.
+```powershell
+python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation simcutmix --mixup-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k20_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
+```
 
----
+Here, the saved K40 neighbor set is filtered to ranks 21–40 for training.
+Class-aware, different-label, anchor-gated, and dynamic-pool variants use the
+same pipeline with different CLI settings. See
+[Architecture](docs/architecture.md) for their roles.
+
+## Outputs and Results
+
+New runs are written below:
+
+```text
+results/experiments/<dataset>/<model>/k<k>/<method>/
+  [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
+  e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
+```
+
+The eight-character config ID prevents two runs with different hidden recipe
+settings from overwriting one another. Full optimizer, schedule, and
+augmentation settings remain readable in `summary.json`.
+
+Each completed run contains:
+
+| File | Purpose |
+|---|---|
+| `metrics.csv` | Per-epoch training and validation metrics. |
+| `summary.json` | Configuration, best validation epoch, and test evaluation. |
+| `checkpoint_best.pt` | Best-validation checkpoint; local and ignored by Git. |
+
+Earlier ResNet50 runs without the current learning-rate schedule are stored in
+the external sibling archive
+`../SRP-old_experiments/historical_no_lr_schedule/` and are not indexed as
+active results.
+
+The central folder documentation and sortable index are:
+
+- [Experiment Folder Guide](results/experiments/README.md)
+- [Experiment Manifest](results/experiments/manifest.csv)
+
+After adding or moving canonical run summaries, regenerate the manifest:
+
+```powershell
+python src\experiments\build_manifest.py
+```
+
+Audit summary/metrics pairs, recorded artifact paths, local `.pt` payloads, and
+checkpoint retention candidates with:
+
+```powershell
+python src\experiments\audit_artifacts.py --details
+```
+
+The audit is read-only unless an explicit `--json-output` path is supplied. It
+never moves or deletes artifacts.
+
+Large `.pt` files, raw data, and generated figures are not committed. A fresh
+clone can inspect the tracked metrics and summaries, but guided runs must
+regenerate or obtain their neighbor payloads.
 
 ## Plotting
 
-Generate accuracy and loss plots from saved metric CSV files:
+Generate the standard comparison figures from saved summaries and metrics:
 
-```bash
-python src/graphs/plot_graphs.py
+```powershell
+python src\graphs\plot_graphs.py
 ```
+
+Figures are written to `results/experiments/shared/figures/` and are ignored by
+Git.
+
+## Current Limitations
+
+- Most reported experiments still use a single subset seed and training seed.
+- Two active ViT AugMix summaries reference checkpoints that are not available
+  locally; their tracked metrics and summaries are complete.
+- The environment is not yet captured by an exact lock file or inside run
+  summaries.
+- Current result discrepancies and research tasks are listed in
+  [Project Status](docs/project_status.md).
+
+## Documentation Ownership
+
+To prevent status information from diverging:
+
+- `README.md` owns setup, entry points, and first-run instructions.
+- `docs/architecture.md` owns the system and data-flow explanation.
+- `docs/reproducibility.md` owns reproduction requirements and limitations.
+- `docs/project_status.md` owns current work, known gaps, and next tasks.
+- `notes/current_results_summary.md` owns detailed result interpretation.
+- `results/experiments/README.md` owns the experiment-folder conventions.
+- `results/experiments/manifest.csv` is a generated run index, not a narrative
+  source of truth.
