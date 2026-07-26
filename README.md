@@ -57,8 +57,7 @@ SRP-Augmentation/
 ├── notes/
 │   └── experiment_results_summary_v1.md
 ├── results/
-│   ├── experiments/            # Canonical run records and shared artifacts
-│   └── experiments_v2/         # Historical results awaiting consolidation
+│   └── experiments/            # Canonical run records and shared artifacts
 ├── src/
 │   ├── augmentations/          # MixUp, CutMix, AugMix, SimMixUp, SimCutMix
 │   ├── data/                   # Split generation and indexed datasets
@@ -227,6 +226,16 @@ After adding or moving canonical run summaries, regenerate the manifest:
 python src\experiments\build_manifest.py
 ```
 
+Audit summary/metrics pairs, recorded artifact paths, local `.pt` payloads, and
+checkpoint retention candidates with:
+
+```powershell
+python src\experiments\audit_artifacts.py --details
+```
+
+The audit is read-only unless an explicit `--json-output` path is supplied. It
+never moves or deletes artifacts.
+
 Large `.pt` files, raw data, and generated figures are not committed. A fresh
 clone can inspect the tracked metrics and summaries, but guided runs must
 regenerate or obtain their neighbor payloads.
@@ -247,8 +256,6 @@ Git.
 - Most reported experiments still use a single subset seed and training seed.
 - Some historical summaries reference checkpoints or neighbor payloads that
   are not available locally.
-- Two historical `experiments_v2` run records still need consolidation into the
-  canonical experiment folder.
 - The environment is not yet captured by an exact lock file or inside run
   summaries.
 - Current result discrepancies and research tasks are listed in

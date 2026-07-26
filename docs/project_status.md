@@ -50,19 +50,22 @@ summaries rather than editing it manually.
 
 The canonical `results/experiments/` tree currently contains:
 
-- 64 complete `summary.json` and `metrics.csv` pairs;
-- 52 ResNet50 runs and 12 ViT runs;
-- 36 k=100, 12 k=20, 12 k=50, and 4 k=450 runs;
+- 66 complete `summary.json` and `metrics.csv` pairs;
+- 54 ResNet50 runs and 12 ViT runs;
+- 38 k=100, 12 k=20, 12 k=50, and 4 k=450 runs;
 - 8 runs in the current `standard_cifar_recipe` layout;
-- 56 runs in the earlier canonical layout, including 3 explicitly retained
+- 58 runs in the earlier canonical layout, including 3 explicitly retained
   `legacy/` runs.
 
-The checked-in manifest still has 56 rows and does not yet index the 8 newer
-standard-recipe runs. It must be regenerated during result consolidation.
+The generated manifest contains 66 unique experiment IDs and indexes all
+current canonical summaries.
 
-Two additional SimMixUp result pairs remain under `results/experiments_v2/`.
-They use different-label neighbors and still need to be classified and moved
-or archived within the canonical result structure.
+The two former `experiments_v2` different-label SimMixUp runs were consolidated
+under the canonical k=100 SimMixUp tree on 2026-07-26. Their original output
+root is retained in each configuration, and explicit consolidation metadata
+records the previous summary path. Their matching checkpoints were verified
+against the stored configuration, epoch, and validation score before being
+placed beside the canonical summaries.
 
 ## Current Scientific Evidence
 
@@ -108,6 +111,13 @@ rather than a claim that every current run has already been re-analysed.
 - `requirements.txt` is an install specification rather than an exact
   environment lock.
 - Some result paths exceed the traditional Windows 260-character limit.
+- The local artifact audit identifies 14 checkpoints requiring a retention
+  decision: 9 unreferenced shared historical checkpoints (`2.39 GiB`) and 5
+  checkpoints from incomplete run folders (`1.24 GiB`).
+- Ten high-confidence smoke or failed checkpoints (`2.04 GiB`) were deleted on
+  2026-07-26 after path, configuration, size, and hash validation. Their
+  provenance is retained in
+  `results/experiments/artifact_cleanup_log.json`.
 
 The CSV and JSON records for affected historical runs are preserved. Missing
 support artifacts should be reported explicitly rather than silently
@@ -123,12 +133,12 @@ reconstructed or substituted.
 
 ## Next Repository-Maintenance Tasks
 
-1. Regenerate and verify the experiment manifest.
-2. Consolidate the remaining `experiments_v2` records.
-3. Inventory local `.pt` artifacts before archiving or deleting anything.
-4. Introduce a locked experiment environment and record environment metadata
+1. Review the 14 checkpoint retention candidates before archiving or deleting
+   anything.
+2. Decide which final-run checkpoints need durable external storage.
+3. Introduce a locked experiment environment and record environment metadata
    in future summaries.
-5. Shorten future run paths while preserving historical records.
+4. Shorten future run paths while preserving historical records.
 
 ## Bottom Line
 

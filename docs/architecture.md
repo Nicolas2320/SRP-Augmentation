@@ -59,6 +59,7 @@ flowchart LR
 | `src/proposal/inspect_neighbors.py` | Validates embedding and neighbor payloads. |
 | `src/proposal/score_anchors.py` | Combines uncertainty and rarity into optional anchor-selection scores. |
 | `src/experiments/build_manifest.py` | Generates the sortable experiment catalog. |
+| `src/experiments/audit_artifacts.py` | Audits result pairs, recorded references, and local artifact retention candidates without deleting files. |
 | `src/graphs/plot_graphs.py` | Generates comparison figures from summaries and epoch metrics. |
 | `tests/` | Unit and small integration tests for splits, datasets, guided methods, and the training recipe. |
 

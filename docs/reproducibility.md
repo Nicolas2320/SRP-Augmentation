@@ -185,6 +185,15 @@ After adding or moving canonical summaries, rebuild the manifest:
 python src\experiments\build_manifest.py
 ```
 
+Audit the availability and classification of local artifacts with:
+
+```powershell
+python src\experiments\audit_artifacts.py --details
+```
+
+This command is read-only. Use `--json-output <path>` only when a
+machine-readable local snapshot is needed.
+
 Generate the current comparison figures with:
 
 ```powershell

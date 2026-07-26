@@ -177,6 +177,8 @@ Baseline interpretation:
 The table below ranks all 50-epoch CIFAR-100 ResNet50 k=100 runs by test
 accuracy. Deltas use the best available 50-epoch MixUp result, `36.64%`, and
 the new 50-epoch CutMix result, `37.57%`, as reference points.
+Source labels retain the collection names used when this versioned summary was
+assembled, even when the corresponding artifacts were later consolidated.
 
 | Rank | Source | Method | Setting | Best epoch | Train acc | Val acc | Test acc | Test loss | Gap | Delta vs 50e MixUp | Delta vs 50e CutMix |
 |---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|

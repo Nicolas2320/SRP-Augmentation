@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "events": [
+    {
+      "date": "2026-07-26",
+      "action": "permanent_local_deletion",
+      "reason": "Remove high-confidence smoke or failed checkpoints with no matching canonical summary configuration.",
+      "selection_rule": "Planned epochs <= 10 or best validation accuracy < 0.07; zero canonical summary configuration matches.",
+      "artifact_count": 10,
+      "total_size_bytes": 2187235849,
+      "recoverability": "The binaries were ignored by Git. Recovery requires an external backup or regeneration.",
+      "artifacts": [
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k20_seed0_simcutmix_class_aware_neighbors_class_aware_K20_nk10_uniform_alpha1_mp1_warm0_epochs2_best.pt",
+          "size_bytes": 285050496,
+          "sha256": "679edaa7ad3108181d7ff0142990ab6e212ea921008c8d4ef259c940e0e29405",
+          "planned_epochs": 2,
+          "best_epoch": 2,
+          "best_val_acc": 0.0388
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k20_seed0_simmixup_epochs10_best.pt",
+          "size_bytes": 284952988,
+          "sha256": "83c688cc271211ed5281506b5c49b578abb860bcd3fe5d05eaa0bfb72bb5d8fb",
+          "planned_epochs": 10,
+          "best_epoch": 8,
+          "best_val_acc": 0.096
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k50_seed0_none_epochs5_best.pt",
+          "size_bytes": 284948687,
+          "sha256": "7683a22be8ee6ccfa79de57b7a2e1adb9fd0352811c16ae45b7afaed48141afc",
+          "planned_epochs": 5,
+          "best_epoch": 3,
+          "best_val_acc": 0.0778
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k20_seed0_simmixup_epochs2_best.pt",
+          "size_bytes": 284942707,
+          "sha256": "c2fd995fc4f9889fa8fac97e3db71232e56f401097aed4d92d0c2e6414c268cb",
+          "planned_epochs": 2,
+          "best_epoch": 1,
+          "best_val_acc": 0.0226
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k50_seed0_none_epochs30_best.pt",
+          "size_bytes": 284940024,
+          "sha256": "7f40d634cc1184b3c7e777bb730ba4154ce50a9be816806d00d5a15c1d4b7860",
+          "planned_epochs": 30,
+          "best_epoch": 2,
+          "best_val_acc": 0.0464
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k100/standard_cifar_recipe/sgd_mom0p9_nesterov_bs64_lr1_wd0p0005_m30-55-75-90_g0p1/simcutmix/class_agnostic_K40/r21-40/uniform_nk20_a1_mp1_w0/e100_s0_t0/checkpoint_best.pt",
+          "size_bytes": 190014005,
+          "sha256": "3b45f24f45750a80213f66b2192dccbb8cfeb39973e0aa3eb08b55ac7b9ebc83",
+          "planned_epochs": 100,
+          "best_epoch": 9,
+          "best_val_acc": 0.0312
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k100/standard_cifar_recipe/sgd_mom0p9_nesterov_bs64_lr0p1_wd0p0005_m15-30-40_g0p2_cp0p5/baselines/cutmix/e50_s0_t0/checkpoint_best.pt",
+          "size_bytes": 190013941,
+          "sha256": "06d4861db43d0fc514a2b3f8fcdacced3e5db2f0103eb3e07ae1cdf87e5b1700",
+          "planned_epochs": 50,
+          "best_epoch": 1,
+          "best_val_acc": 0.0154
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k450/standard_cifar_recipe/sgd_mom0p9_nesterov_bs64_lr0p1_wd0p0005_m15-30-40_g0p2/baselines/augmix/e50_s0_t0/checkpoint_best.pt",
+          "size_bytes": 190013941,
+          "sha256": "d869f5b6fc011550730a51b25f277ec4bea7a546ca72614914f67db39bc01e69",
+          "planned_epochs": 50,
+          "best_epoch": 1,
+          "best_val_acc": 0.0336
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet18_k50_seed0_none_epochs30_best.pt",
+          "size_bytes": 134782701,
+          "sha256": "fde40f7844a64b95bf54b24e2acec891fa5afdfa9c18d56c389458bccbbb2df8",
+          "planned_epochs": 30,
+          "best_epoch": 1,
+          "best_val_acc": 0.0644
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_vit_k100_seed0_cutmix_epochs5_best.pt",
+          "size_bytes": 57576359,
+          "sha256": "8dfa0378d5efb7c20ad157c14dcf2891c8ba0e32e8505b70d3319743fa15afd5",
+          "planned_epochs": 5,
+          "best_epoch": 1,
+          "best_val_acc": 0.0268
+        }
+      ]
+    }
+  ]
+}

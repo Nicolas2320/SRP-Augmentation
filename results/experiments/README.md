@@ -13,14 +13,16 @@ For known discrepancies and maintenance work, read
 | Location | Purpose |
 |---|---|
 | `manifest.csv` | Generated spreadsheet-friendly index of canonical summaries. |
+| `artifact_cleanup_log.json` | Provenance ledger for intentionally removed local artifacts. |
 | `cifar100/` | Dataset/model/k/method run records. |
 | `shared/neighbors/` | Reusable embeddings, neighbor payloads, and metadata. |
 | `shared/anchor_scores/` | Anchor uncertainty and rarity scores. |
 | `shared/checkpoints/` | Historical or unmatched local checkpoints. |
 | `shared/figures/` | Generated comparison figures. |
 
-The top-level `results/experiments_v2/` directory is historical and is not a
-second canonical result root. Its remaining records are awaiting consolidation.
+The two result pairs formerly stored below `results/experiments_v2/` were
+consolidated into the canonical k=100 SimMixUp tree on 2026-07-26. Their
+summaries retain explicit provenance fields for the previous locations.
 
 ## Completed Run Contract
 
@@ -131,12 +133,30 @@ Regenerate it after adding or moving run records:
 python src\experiments\build_manifest.py
 ```
 
-As of the 2026-07-26 documentation review, the canonical tree contains 64
-summary/metrics pairs while the checked-in manifest contains 56 rows. The next
-result-consolidation pass must regenerate and verify it.
+As of the 2026-07-26 result consolidation, the canonical tree and manifest both
+contain 66 experiments with unique IDs.
 
 Do not edit the manifest manually. Correct the source summary or the manifest
 builder instead.
+
+## Artifact Audit
+
+Run the read-only artifact audit with:
+
+```powershell
+python src\experiments\audit_artifacts.py --details
+```
+
+It checks:
+
+- canonical summary/metrics pairs;
+- paths recorded by summaries and shared metadata;
+- local `.pt` and `.pth` classification;
+- checkpoint files that need a manual retention decision;
+- result files outside the canonical root.
+
+The default command only prints findings. `--json-output <path>` can save a
+machine-readable local snapshot; the audit never deletes or moves artifacts.
 
 ## Figures
 
