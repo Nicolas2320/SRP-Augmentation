@@ -4,7 +4,7 @@
 support artifacts.
 
 For scientific interpretation, read
-[`notes/experiment_results_summary_v1.md`](../../notes/experiment_results_summary_v1.md).
+[`notes/current_results_summary.md`](../../notes/current_results_summary.md).
 For known discrepancies and maintenance work, read
 [`docs/project_status.md`](../../docs/project_status.md).
 
@@ -16,13 +16,12 @@ For known discrepancies and maintenance work, read
 | `artifact_cleanup_log.json` | Provenance ledger for intentionally removed local artifacts. |
 | `cifar100/` | Dataset/model/k/method run records. |
 | `shared/neighbors/` | Reusable embeddings, neighbor payloads, and metadata. |
-| `shared/anchor_scores/` | Anchor uncertainty and rarity scores. |
-| `shared/checkpoints/` | Historical or unmatched local checkpoints. |
-| `shared/figures/` | Generated comparison figures. |
+| `shared/figures/` | Generated comparison figures; created only when plotting is run. |
 
-The two result pairs formerly stored below `results/experiments_v2/` were
-consolidated into the canonical k=100 SimMixUp tree on 2026-07-26. Their
-summaries retain explicit provenance fields for the previous locations.
+Earlier no-LR-schedule ResNet50 runs, K100 ablations, legacy records, and anchor
+scores were moved to the external `historical_no_lr_schedule` archive on
+2026-07-26. The move and destination are recorded in
+`artifact_cleanup_log.json`.
 
 ## Completed Run Contract
 
@@ -47,76 +46,59 @@ documented in `docs/project_status.md`.
 
 ## Current Output Layout
 
-The current `src/train.py` writes a recipe-aware path:
+The current `src/train.py` writes a concise, collision-safe path:
 
 ```text
 results/experiments/
   <dataset>/
     <model>/
       k<k>/
-        standard_cifar_recipe/
-          <optimizer-batch-lr-weight-decay-schedule>/
-            baselines/
-              <augmentation>/
-                e<epochs>_s<subset-seed>_t<train-seed>/
-            simmixup/
-              <guided-settings>/
-                e<epochs>_s<subset-seed>_t<train-seed>/
-            simcutmix/
-              <guided-settings>/
-                e<epochs>_s<subset-seed>_t<train-seed>/
+        <method>/
+          <guided-mode>_k<saved-neighbors>_r<rank-window>/  # guided only
+            e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
 ```
 
-The recipe component makes optimizer and schedule differences visible instead
-of allowing incompatible runs to share a folder.
+Baseline methods omit the guided component. The eight-character config ID is
+derived from all scientific configuration fields and prevents different
+optimizer, schedule, or augmentation settings from overwriting one another.
+The complete readable configuration remains in `summary.json`.
 
-## Earlier Canonical Layout
+## Earlier Records and Archive
 
-Runs created before the recipe-aware output change remain valid in the shorter
-layout:
+The 12 retained ViT baseline records predate the concise layout and remain
+under:
 
 ```text
-results/experiments/
-  <dataset>/
-    <model>/
-      k<k>/
-        baselines/
-        simmixup/
-        simcutmix/
-        legacy/
+results/experiments/cifar100/vit/k<k>/baselines/<method>/e<epochs>_s0_t0/
 ```
 
-Do not move these runs merely to make the tree visually uniform. Their paths
-are referenced by summaries, notes, and the manifest. Any future migration
-should update those references together and verify the resulting catalog.
-
-Use `legacy/` only for non-exact historical reruns retained for provenance.
-Exact or equivalent duplicates should be classified during artifact cleanup
-before any deletion.
+Their folders are already short, and their full recorded configuration remains
+in each summary. Earlier no-LR-schedule ResNet50 runs are no longer part of the
+active canonical tree. They are preserved under
+`SRP-old_experiments/historical_no_lr_schedule`, which contains a 46-run
+archive manifest, the original 66-run manifest, documentation snapshots, and
+archived-only neighbor support. Do not mix archived results with active
+scheduled-training results unless the comparison explicitly uses the same
+recipe.
 
 ## Guided Setting Components
 
 Guided run paths encode the settings most useful during browsing:
 
 ```text
-<guided-mode>_K<saved-neighbor-count>/
-  r<first-rank>-<last-rank>/
-    <sampling>_nk<count>_a<alpha>_mp<mix-probability>_w<warmup>/
+<guided-mode>_k<saved-neighbor-count>_r<first-rank>-<last-rank>/
 ```
 
-Anchor-gated SimMixUp adds an anchor-selection component. The full
-configuration remains authoritative in `summary.json`; folder names are a
-navigation aid.
+Sampling, alpha, mix probability, warmup, anchor gating, and dynamic-pool
+settings remain authoritative in `summary.json` and are covered by the config
+ID. Folder names are a navigation aid.
 
 ## Shared Artifacts
 
 | Folder | Meaning |
 |---|---|
 | `shared/neighbors/` | Embeddings and filtered neighbor payloads reused by guided methods. |
-| `shared/anchor_scores/` | Per-anchor scores used by targeted mixing. |
-| `shared/checkpoints/` | Historical local checkpoints not stored beside a canonical summary. |
-| `shared/checkpoints/unmatched/` | Checkpoints without a matching local CSV/summary pair. |
-| `shared/figures/` | Generated plots from `src/graphs/plot_graphs.py`. |
+| `shared/figures/` | Generated plots from `src/graphs/plot_graphs.py`; absent until regenerated. |
 
 Large `.pt` files and `.png` figures are ignored by Git. Metadata JSON and
 small result records may be committed so their origin and expected paths remain
@@ -125,7 +107,8 @@ visible.
 ## Manifest
 
 `manifest.csv` is generated from canonical `summary.json` files and is intended
-for filtering and comparison without opening every directory.
+for filtering and comparison without opening every directory. Its `config_id`
+column matches the suffix used by concise-layout runs.
 
 Regenerate it after adding or moving run records:
 
@@ -133,8 +116,9 @@ Regenerate it after adding or moving run records:
 python src\experiments\build_manifest.py
 ```
 
-As of the 2026-07-26 result consolidation, the canonical tree and manifest both
-contain 66 experiments with unique IDs.
+As of the 2026-07-26 archive cleanup, the canonical tree and manifest both
+contain 20 experiments with unique IDs: 8 scheduled-training ResNet50 runs and
+12 ViT baseline runs.
 
 Do not edit the manifest manually. Correct the source summary or the manifest
 builder instead.
@@ -166,8 +150,8 @@ Generate the standard comparison figures with:
 python src\graphs\plot_graphs.py
 ```
 
-The script reads summaries and epoch metrics, excludes explicit `legacy/` runs
-where applicable, and writes figures under `shared/figures/`.
+The script reads the active summaries and epoch metrics and writes figures
+under `shared/figures/`.
 
 ## Maintenance Checklist
 

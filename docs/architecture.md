@@ -118,25 +118,29 @@ The current training entry point writes runs below:
 ```text
 results/experiments/
   <dataset>/<model>/k<k>/
-    standard_cifar_recipe/
-      <optimizer-and-schedule>/
-        <method-and-guided-settings>/
-          e<epochs>_s<subset-seed>_t<train-seed>/
-            metrics.csv
-            summary.json
-            checkpoint_best.pt
+    <method>/
+      [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
+        e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
+          metrics.csv
+          summary.json
+          checkpoint_best.pt
 ```
 
-The repository also retains valid historical runs in the earlier, shorter
+The short config ID is derived from the complete scientific configuration and
+prevents accidental overwrites. The full configuration remains authoritative
+in `summary.json`.
+
+Earlier runs without the current learning-rate schedule used the shorter
 layout:
 
 ```text
 results/experiments/<dataset>/<model>/k<k>/<method>/.../
 ```
 
-These two layouts describe when a run was created; they are not two different
-training engines. Historical non-exact reruns are explicitly placed below a
-`legacy/` directory.
+Those historical runs are stored in the external sibling archive
+`../SRP-old_experiments/historical_no_lr_schedule/` and are not part of the
+active manifest. The layouts describe when a run was created; they are not two
+different training engines.
 
 Artifact responsibilities are:
 
@@ -147,8 +151,8 @@ Artifact responsibilities are:
 | `checkpoint_best.pt` | Model and optimizer state at the best validation epoch. |
 | `manifest.csv` | Generated, spreadsheet-friendly index of run summaries. |
 | `shared/neighbors/` | Reusable embeddings, neighbor payloads, and their metadata. |
-| `shared/anchor_scores/` | Optional anchor-selection score files. |
-| `shared/figures/` | Generated comparison plots. |
+| `shared/anchor_scores/` | Optional anchor-selection score files; created on demand. |
+| `shared/figures/` | Generated comparison plots; created on demand. |
 
 CSV and JSON research records are committed when they are part of the project
 evidence. Large `.pt` payloads and generated `.png` figures are ignored by Git

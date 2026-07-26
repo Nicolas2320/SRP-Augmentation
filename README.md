@@ -35,7 +35,7 @@ New collaborators should read these files in order:
 2. [Architecture](docs/architecture.md) for the data and training flow.
 3. [Reproducibility](docs/reproducibility.md) before running experiments.
 4. [Project Status](docs/project_status.md) for current results and known gaps.
-5. [Experiment Results Summary](notes/experiment_results_summary_v1.md) for the
+5. [Current Results Summary](notes/current_results_summary.md) for the
    detailed scientific narrative.
 
 The original project proposal is available at
@@ -55,7 +55,7 @@ SRP-Augmentation/
 │   └── Proposal_SRP.pdf        # Original research proposal
 ├── notebooks/                  # Exploratory and visual validation notebooks
 ├── notes/
-│   └── experiment_results_summary_v1.md
+│   └── current_results_summary.md
 ├── results/
 │   └── experiments/            # Canonical run records and shared artifacts
 ├── src/
@@ -200,8 +200,14 @@ same pipeline with different CLI settings. See
 New runs are written below:
 
 ```text
-results/experiments/<dataset>/<model>/k<k>/standard_cifar_recipe/...
+results/experiments/<dataset>/<model>/k<k>/<method>/
+  [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
+  e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
 ```
+
+The eight-character config ID prevents two runs with different hidden recipe
+settings from overwriting one another. Full optimizer, schedule, and
+augmentation settings remain readable in `summary.json`.
 
 Each completed run contains:
 
@@ -211,9 +217,10 @@ Each completed run contains:
 | `summary.json` | Configuration, best validation epoch, and test evaluation. |
 | `checkpoint_best.pt` | Best-validation checkpoint; local and ignored by Git. |
 
-Historical valid runs remain in the earlier canonical layout directly below
-`k<k>/`. Runs explicitly retained as non-exact historical references live
-under `legacy/`.
+Earlier ResNet50 runs without the current learning-rate schedule are stored in
+the external sibling archive
+`../SRP-old_experiments/historical_no_lr_schedule/` and are not indexed as
+active results.
 
 The central folder documentation and sortable index are:
 
@@ -254,8 +261,8 @@ Git.
 ## Current Limitations
 
 - Most reported experiments still use a single subset seed and training seed.
-- Some historical summaries reference checkpoints or neighbor payloads that
-  are not available locally.
+- Two active ViT AugMix summaries reference checkpoints that are not available
+  locally; their tracked metrics and summaries are complete.
 - The environment is not yet captured by an exact lock file or inside run
   summaries.
 - Current result discrepancies and research tasks are listed in
@@ -269,7 +276,7 @@ To prevent status information from diverging:
 - `docs/architecture.md` owns the system and data-flow explanation.
 - `docs/reproducibility.md` owns reproduction requirements and limitations.
 - `docs/project_status.md` owns current work, known gaps, and next tasks.
-- `notes/experiment_results_summary_v1.md` owns detailed result interpretation.
+- `notes/current_results_summary.md` owns detailed result interpretation.
 - `results/experiments/README.md` owns the experiment-folder conventions.
 - `results/experiments/manifest.csv` is a generated run index, not a narrative
   source of truth.

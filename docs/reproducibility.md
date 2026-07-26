@@ -170,10 +170,10 @@ Git ignores large or generated artifacts:
 
 As a result, a fresh clone can inspect reported results and run standard
 experiments, but it must regenerate or obtain the relevant `.pt` payloads to
-resume a historical checkpoint or run a guided method.
+resume a checkpoint or run a guided method.
 
-Some historical summaries reference local checkpoints or neighbor payloads that
-are no longer present. These cases are recorded in
+Two active ViT AugMix summaries reference local checkpoints that are no longer
+present. These cases are recorded in
 [project_status.md](project_status.md); their CSV and JSON result records remain
 available.
 

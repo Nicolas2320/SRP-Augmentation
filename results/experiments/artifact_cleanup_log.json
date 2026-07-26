@@ -91,6 +91,120 @@
           "best_val_acc": 0.0268
         }
       ]
+    },
+    {
+      "date": "2026-07-26",
+      "action": "external_archive_move",
+      "reason": "Remove earlier no-LR-schedule and legacy runs from the active scheduled-training comparison set while preserving their scientific record.",
+      "destination": "../SRP-old_experiments/historical_no_lr_schedule",
+      "folder_count": 9,
+      "artifact_count": 147,
+      "total_size_bytes": 11561108475,
+      "summary_count": 46,
+      "metrics_count": 46,
+      "checkpoint_count": 41,
+      "neighbor_support_payload_count": 11,
+      "pt_payload_count": 52,
+      "recoverability": "The archive contains a 46-row manifest, the original 66-row manifest, documentation snapshots, all locally available files from the moved run folders, and neighbor support used only by archived experiments.",
+      "source_folders": [
+        "results/experiments/cifar100/resnet50/k20/baselines",
+        "results/experiments/cifar100/resnet50/k20/simcutmix",
+        "results/experiments/cifar100/resnet50/k50/baselines",
+        "results/experiments/cifar100/resnet50/k50/simcutmix",
+        "results/experiments/cifar100/resnet50/k100/baselines",
+        "results/experiments/cifar100/resnet50/k100/simcutmix",
+        "results/experiments/cifar100/resnet50/k100/simmixup",
+        "results/experiments/cifar100/resnet50/k100/legacy",
+        "results/experiments/shared/anchor_scores"
+      ],
+      "support_items": [
+        "results/experiments/shared/neighbors/simmixup_ablation_v2",
+        "results/experiments/shared/neighbors/cifar100/k20_seed0",
+        "results/experiments/shared/neighbors/final_stage_v1/cifar100/k20_seed0/neighbors_class_agnostic_K60.pt",
+        "results/experiments/shared/neighbors/final_stage_v1/cifar100/k50_seed0/neighbors_class_agnostic_K60.pt",
+        "results/experiments/shared/neighbors/cifar100/k100_seed0/neighbors_class_aware_K40.pt"
+      ]
+    },
+    {
+      "date": "2026-07-26",
+      "action": "permanent_local_deletion",
+      "reason": "Remove user-approved unmatched, incomplete, superseded, or out-of-scope checkpoints after the result archive was created.",
+      "selection_rule": "Nine unreferenced shared checkpoints; two incomplete no-schedule k=450 checkpoints; one incomplete incorrect-schedule k=450 checkpoint; and two incomplete ImageNet-pretrained side-experiment checkpoints. None had a complete summary/metrics pair.",
+      "artifact_count": 14,
+      "total_size_bytes": 3895535767,
+      "recoverability": "The binaries were ignored by Git and were not copied to the historical archive. Recovery requires another external backup or regeneration.",
+      "artifacts": [
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simcutmix_class_agnostic_neighbors_class_agnostic_K40_nk20_r1-20_uniform_alpha1_mp1_warm0_epochs50_anchor_cifar100_resnet50_k100_seed0_none50_resnet50img_uw0p7_rw0p3_random_fraction_top0p2_pow1_best.pt",
+          "size_bytes": 285251829,
+          "sha256": "bd929dad995d3b212b0616c63ca1c87c50b2d28f86e626bf6630cb29548bed71"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simcutmix_class_agnostic_neighbors_class_agnostic_K40_nk20_r1-20_uniform_alpha1_mp1_warm0_epochs50_anchor_cifar100_resnet50_k100_seed0_none50_resnet50img_uw0p7_rw0p3_top_fraction_top0p2_pow1_best.pt",
+          "size_bytes": 285249402,
+          "sha256": "41c7f4d72bdce52b2c84ed7eef6ab98527a7ff114474cc337aa56b4756763d68"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simmixup_class_agnostic_neighbors_class_agnostic_K20_nk20_uniform_alpha1_mp1_warm15_epochs50_best.pt",
+          "size_bytes": 285068936,
+          "sha256": "6a492b9a142f7e2df7ea3f6dc992af2d2d050da6d0c9abeac8683dc5ef0d2825"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simmixup_class_agnostic_neighbors_class_agnostic_K40_nk40_uniform_alpha1_mp0p5_warm0_epochs50_best.pt",
+          "size_bytes": 285070705,
+          "sha256": "330778df9589b9c66fe47fcc179a6cfb7d9c08f394f32bdc1b9ad44e2d063a87"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simmixup_class_agnostic_neighbors_class_agnostic_K40_nk40_uniform_alpha1_mp0p8_warm0_epochs50_best.pt",
+          "size_bytes": 285070705,
+          "sha256": "f8bc2014d23f4624b46a7d67a26ee0bfaf1ee09e9e4c5b2ae5458077b230fe88"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simmixup_class_agnostic_neighbors_class_agnostic_K40_nk40_uniform_alpha1_mp1_warm0_epochs50_best.pt",
+          "size_bytes": 285065759,
+          "sha256": "70ab916d0e1e5386e53a56d8be9e54ee8bb9dbb2734d48add85baf91fbbf3aca"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k100_seed0_simmixup_epochs50_best.pt",
+          "size_bytes": 284953797,
+          "sha256": "355b5c68400d175c39f3ed9749308dd05523dc744ebdcda4bcdc340845a0c16a"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k20_seed0_simmixup_epochs100_best.pt",
+          "size_bytes": 284953797,
+          "sha256": "1bbbc89bbd9ab47ec68743ed525acfe75c4b154865415db538340280a97055f0"
+        },
+        {
+          "path": "results/experiments/shared/checkpoints/cifar100_resnet50_k20_seed0_simmixup_epochs50_best.pt",
+          "size_bytes": 284952988,
+          "sha256": "447f1d2162df5dd9b6e36f0953b07eb97dbe12d4c228464cc7ea654ec4156ff9"
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k450/baselines/cutmix/e100_s0_t0/checkpoint_best.pt",
+          "size_bytes": 284924865,
+          "sha256": "28634e2391591f24dfbe8736d49800761ea47daf879c51675ad9bf3998a3abd7"
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k450/baselines/none/e100_s0_t0/checkpoint_best.pt",
+          "size_bytes": 284924865,
+          "sha256": "b7e5228a245f9fde08da0c011bd06c71337f56003185c2d72d57cd9c2e5c51aa"
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50/k450/standard_cifar_recipe/sgd_mom0p9_nesterov_bs64_lr0p1_wd0p0005_m30-60-80_g0p2_cp0p5/baselines/cutmix/e50_s0_t0/checkpoint_best.pt",
+          "size_bytes": 190013941,
+          "sha256": "15625e9a9d145e1e9ea4d288670dba57753a35ad641b7c580cb0857a6a73f63e"
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50_pretrained_imagenet/k450/baselines/cutmix/e50_s0_t0/checkpoint_best.pt",
+          "size_bytes": 285017089,
+          "sha256": "457d34fbfd0f14f3c127c2a6217de4602c026635fba1f7ce163d7c7419db739f"
+        },
+        {
+          "path": "results/experiments/cifar100/resnet50_pretrained_imagenet_input32/k450/baselines/cutmix/e50_s0_t0/checkpoint_best.pt",
+          "size_bytes": 285017089,
+          "sha256": "29ef4cbebb5844a500c96dcd92e8b62c86d665b25fd7d76d349c8fd0b39422d0"
+        }
+      ]
     }
   ]
 }
