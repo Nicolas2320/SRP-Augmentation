@@ -200,6 +200,12 @@ Generate the current comparison figures with:
 python src\graphs\plot_graphs.py
 ```
 
+The direct-comparison figures pair SimMixUp with MixUp and SimCutMix with CutMix
+only when the dataset, model, k, seeds, epoch budget, optimizer, and
+learning-rate recipe match. Augmentation-specific settings remain properties of
+the compared method configurations. A single run is plotted without an
+uncertainty interval.
+
 Before reporting a result:
 
 1. Verify the summary and metrics pair.
