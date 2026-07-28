@@ -255,8 +255,20 @@ Generate the standard comparison figures from saved summaries and metrics:
 python src\graphs\plot_graphs.py
 ```
 
-Figures are written to `results/experiments/shared/figures/` and are ignored by
-Git.
+The plotting suite writes five views to
+`results/experiments/shared/figures/`:
+
+- matched proposal-versus-baseline test accuracy;
+- a grouped-bar alternative of the matched test comparison;
+- validation curves for those matched comparisons;
+- all available active test results, without filling missing cells; and
+- a coverage matrix with the run count in every method/k cell.
+
+Single runs are shown without uncertainty bars. Sample-standard-deviation bars
+and bands appear automatically once repeated runs are available. Generated
+figures are ignored by Git. Stars and annotations on the validation curves mark
+the best-validation epochs whose saved checkpoints were evaluated on the test
+set.
 
 ## Current Limitations
 

@@ -150,8 +150,12 @@ Generate the standard comparison figures with:
 python src\graphs\plot_graphs.py
 ```
 
-The script reads the active summaries and epoch metrics and writes figures
-under `shared/figures/`.
+The script reads the active summaries and epoch metrics and writes five figures
+under `shared/figures/`: matched proposal/baseline test accuracy in dumbbell and
+grouped-bar forms, matched validation curves, all available test accuracy by k,
+and experiment coverage. Best-validation checkpoint epochs are marked directly
+on the validation curves. The script never replaces missing results with zero,
+and it only draws uncertainty when repeated runs make uncertainty estimable.
 
 ## Maintenance Checklist
 
