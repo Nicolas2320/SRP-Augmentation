@@ -6,6 +6,9 @@ data/raw/
 *.pth
 *.png
 
+!docs/figures/
+!docs/figures/*.png
+
 # macOS
 .DS_Store
 

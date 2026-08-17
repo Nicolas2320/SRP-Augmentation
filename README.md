@@ -41,6 +41,39 @@ New collaborators should read these files in order:
 The original project proposal is available at
 [`docs/Proposal_SRP.pdf`](docs/Proposal_SRP.pdf).
 
+## Current Visual Evidence
+
+The figures below are generated from the tracked experiment summaries and
+epoch metrics by `src/graphs/plot_graphs.py`. They are committed so GitHub
+always shows the current evidence alongside the underlying records.
+
+### Direct proposal-versus-baseline comparisons
+
+This is the primary result figure: it pairs each proposed method with its
+matched standard baseline under the same recorded training recipe. A positive
+gap favours the proposed method. It currently reports single-run comparisons,
+so it does not imply statistical significance.
+
+![Matched proposal-versus-baseline test accuracy](docs/figures/matched_test_accuracy.png)
+
+### Available results across data budgets
+
+This view shows all available active results for both ResNet50 and ViT. Missing
+method--k combinations remain blank rather than being estimated, so it also
+shows where further matched runs are still needed.
+
+![Available ResNet50 and ViT test accuracy across k](docs/figures/available_test_accuracy_vs_k.png)
+
+### Validation trajectories for direct comparisons
+
+The validation curves show the paired ResNet50 and ViT comparisons and mark
+the best-validation checkpoints used for the corresponding test measurements.
+
+![Matched validation trajectories](docs/figures/matched_validation_curves.png)
+
+The [coverage matrix](docs/figures/experiment_coverage.png) provides the
+complete experiment-status view, including missing cells and run counts.
+
 ## Repository Structure
 
 ```text
@@ -50,6 +83,7 @@ SRP-Augmentation/
 │   └── splits/                 # Committed validation and k-shot indices
 ├── docs/
 │   ├── architecture.md         # System and experiment flow
+│   ├── figures/                # Versioned figures displayed on GitHub
 │   ├── project_status.md       # Current stage, evidence, and gaps
 │   ├── reproducibility.md      # Reproduction checklist and limitations
 │   └── Proposal_SRP.pdf        # Original research proposal
@@ -243,9 +277,11 @@ python src\experiments\audit_artifacts.py --details
 The audit is read-only unless an explicit `--json-output` path is supplied. It
 never moves or deletes artifacts.
 
-Large `.pt` files, raw data, and generated figures are not committed. A fresh
-clone can inspect the tracked metrics and summaries, but guided runs must
-regenerate or obtain their neighbor payloads.
+Large `.pt` files and raw data are not committed. The curated figures in
+`docs/figures/` are versioned so GitHub can display the current experiment
+evidence; other PNG outputs remain ignored. A fresh clone can inspect the
+tracked metrics and summaries, but guided runs must regenerate or obtain their
+neighbor payloads.
 
 ## Plotting
 
@@ -255,8 +291,8 @@ Generate the standard comparison figures from saved summaries and metrics:
 python src\graphs\plot_graphs.py
 ```
 
-The plotting suite writes five views to
-`results/experiments/shared/figures/`:
+The plotting suite writes five views to `docs/figures/` by default. These
+curated figures are versioned and displayed in this README:
 
 - matched proposal-versus-baseline test accuracy;
 - a grouped-bar alternative of the matched test comparison;
@@ -265,10 +301,11 @@ The plotting suite writes five views to
 - a coverage matrix with the run count in every method/k cell.
 
 Single runs are shown without uncertainty bars. Sample-standard-deviation bars
-and bands appear automatically once repeated runs are available. Generated
-figures are ignored by Git. Stars and annotations on the validation curves mark
-the best-validation epochs whose saved checkpoints were evaluated on the test
-set.
+and bands appear automatically once repeated runs are available. Stars and
+annotations on the validation curves mark the best-validation epochs whose
+saved checkpoints were evaluated on the test set. Use `--output-dir` to write
+temporary local figures somewhere else without changing the versioned
+publication figures.
 
 ## Current Limitations
 
