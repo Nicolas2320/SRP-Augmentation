@@ -200,6 +200,11 @@ Generate the current comparison figures with:
 python src\graphs\plot_graphs.py
 ```
 
+By default, the command writes the curated, versioned figures to
+`docs/figures/`. Review the regenerated images and commit them with the
+underlying result changes so the GitHub README remains synchronized with the
+experiment records. Use `--output-dir` for temporary local figures.
+
 The direct-comparison figures pair SimMixUp with MixUp and SimCutMix with CutMix
 only when the dataset, model, k, seeds, epoch budget, optimizer, and
 learning-rate recipe match. Augmentation-specific settings remain properties of
