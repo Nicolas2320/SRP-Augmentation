@@ -152,11 +152,12 @@ Artifact responsibilities are:
 | `manifest.csv` | Generated, spreadsheet-friendly index of run summaries. |
 | `shared/neighbors/` | Reusable embeddings, neighbor payloads, and their metadata. |
 | `shared/anchor_scores/` | Optional anchor-selection score files; created on demand. |
-| `shared/figures/` | Generated comparison plots; created on demand. |
+| `docs/figures/` | Versioned comparison plots displayed in the README. |
 
 CSV and JSON research records are committed when they are part of the project
-evidence. Large `.pt` payloads and generated `.png` figures are ignored by Git
-and may exist only on the machine that produced them.
+evidence. Curated comparison figures in `docs/figures/` are also committed so
+GitHub displays the current evidence; large `.pt` payloads and other generated
+PNG files remain local.
 
 ## Safe Extension Points
 

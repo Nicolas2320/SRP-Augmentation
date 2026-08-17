@@ -33,7 +33,10 @@ from matplotlib.patches import Patch
 
 
 DEFAULT_EXPERIMENTS_DIR = Path("results/experiments")
-DEFAULT_FIGURES_DIR = DEFAULT_EXPERIMENTS_DIR / "shared" / "figures"
+# These figures are intentionally versioned so GitHub presents the current
+# research evidence without requiring a reviewer to run the plotting script.
+# Use --output-dir for local, throwaway figure generation instead.
+DEFAULT_FIGURES_DIR = Path("docs/figures")
 
 METHOD_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 PROPOSAL_TO_BASELINE = {
@@ -1330,7 +1333,7 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=None,
-        help="Figure output directory (default: <experiments-dir>/shared/figures).",
+        help="Figure output directory (default: docs/figures).",
     )
     return parser.parse_args()
 
@@ -1338,7 +1341,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     experiments_dir = args.experiments_dir
-    output_dir = args.output_dir or experiments_dir / "shared" / "figures"
+    output_dir = args.output_dir or DEFAULT_FIGURES_DIR
 
     configure_plot_style()
     runs = load_summary_metrics(experiments_dir)
