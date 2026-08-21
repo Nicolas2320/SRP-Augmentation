@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.graphs.plot_graphs import (
     aggregate_runs,
-    build_matched_comparisons,
+    build_all_baseline_comparisons,
     load_summary_metrics,
     spread_label_positions,
 )
@@ -92,6 +92,12 @@ class PlotGraphDataTests(unittest.TestCase):
             )
             write_run(
                 experiments_dir,
+                "baseline_none",
+                augmentation="none",
+                test_acc=0.35,
+            )
+            write_run(
+                experiments_dir,
                 "proposal_matched",
                 augmentation="simcutmix",
                 test_acc=0.46,
@@ -105,15 +111,16 @@ class PlotGraphDataTests(unittest.TestCase):
             )
 
             runs = load_summary_metrics(experiments_dir)
-            comparisons = build_matched_comparisons(runs)
+            comparisons = build_all_baseline_comparisons(runs)
 
             self.assertTrue(runs["metrics_exists"].all())
-            self.assertEqual(len(comparisons), 1)
-            self.assertAlmostEqual(comparisons.iloc[0]["delta_test_pp"], 3.0)
-            self.assertEqual(comparisons.iloc[0]["baseline_label"], "CutMix")
-            self.assertEqual(comparisons.iloc[0]["proposal_label"], "SimCutMix")
-            self.assertEqual(comparisons.iloc[0]["baseline_best_epoch"], 2)
-            self.assertEqual(comparisons.iloc[0]["proposal_best_epoch"], 2)
+            self.assertEqual(len(comparisons), 2)
+            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "No augmentation"})
+            cutmix = comparisons[comparisons["baseline_label"] == "CutMix"].iloc[0]
+            self.assertAlmostEqual(cutmix["delta_test_pp"], 3.0)
+            self.assertEqual(cutmix["proposal_label"], "SimCutMix")
+            self.assertEqual(cutmix["baseline_best_epoch"], 2)
+            self.assertEqual(cutmix["proposal_best_epoch"], 2)
 
     def test_single_runs_keep_uncertainty_missing(self):
         runs = pd.DataFrame(

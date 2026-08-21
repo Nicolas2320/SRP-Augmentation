@@ -49,10 +49,12 @@ always shows the current evidence alongside the underlying records.
 
 ### Direct proposal-versus-baseline comparisons
 
-This is the primary result figure: it pairs each proposed method with its
-matched standard baseline under the same recorded training recipe. A positive
-gap favours the proposed method. It currently reports single-run comparisons,
-so it does not imply statistical significance.
+This is the primary result figure: it compares each proposed method with all
+available standard baselines under the same recorded training recipe. Missing
+baseline runs remain blank. It currently reports single-run comparisons, so it
+does not imply statistical significance. Connected points show the baseline to
+proposal change, and each displayed Δ is proposal minus baseline in percentage
+points.
 
 ![Matched proposal-versus-baseline test accuracy](docs/figures/matched_test_accuracy.png)
 
@@ -66,8 +68,9 @@ shows where further matched runs are still needed.
 
 ### Validation trajectories for direct comparisons
 
-The validation curves show the paired ResNet50 and ViT comparisons and mark
-the best-validation checkpoints used for the corresponding test measurements.
+The validation curves show each proposal together with all available matched
+baseline trajectories and mark the best-validation checkpoints used for the
+corresponding test measurements.
 
 ![Matched validation trajectories](docs/figures/matched_validation_curves.png)
 
@@ -291,11 +294,10 @@ Generate the standard comparison figures from saved summaries and metrics:
 python src\graphs\plot_graphs.py
 ```
 
-The plotting suite writes five views to `docs/figures/` by default. These
+The plotting suite writes four views to `docs/figures/` by default. These
 curated figures are versioned and displayed in this README:
 
 - matched proposal-versus-baseline test accuracy;
-- a grouped-bar alternative of the matched test comparison;
 - validation curves for those matched comparisons;
 - all available active test results, without filling missing cells; and
 - a coverage matrix with the run count in every method/k cell.

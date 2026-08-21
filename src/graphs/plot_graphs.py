@@ -39,6 +39,7 @@ DEFAULT_EXPERIMENTS_DIR = Path("results/experiments")
 DEFAULT_FIGURES_DIR = Path("docs/figures")
 
 METHOD_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
+BASELINE_AUGMENTATIONS = ("none", "mixup", "cutmix", "augmix")
 PROPOSAL_TO_BASELINE = {
     "simmixup": "mixup",
     "simcutmix": "cutmix",
@@ -72,8 +73,8 @@ MARKERS = {
 }
 
 # Fields that should be identical before a proposal result is called a direct
-# comparison with its paired baseline. Augmentation-specific parameters are
-# deliberately excluded: they define the methods being compared.
+# comparison with a baseline. Augmentation-specific parameters are deliberately
+# excluded: they define the methods being compared.
 MATCHED_RECIPE_FIELDS = [
     "dataset",
     "model",
@@ -223,6 +224,31 @@ def series_label(data: dict[str, Any]) -> str:
     return f"{base} ({mode}, ranks {rank_start}–{rank_end})"
 
 
+def configured_series_label(
+    base_label: str,
+    augmentation: str,
+    series_key: str,
+) -> str:
+    """Add augmentation parameters when one method has multiple series."""
+    try:
+        config_text = series_key.split("|", 1)[1]
+        config = json.loads(config_text)
+    except (IndexError, json.JSONDecodeError):
+        return base_label
+
+    if augmentation == "mixup" and config.get("alpha") is not None:
+        return f"{base_label} (alpha={format_number(config['alpha'])})"
+    if augmentation == "cutmix":
+        details: list[str] = []
+        if config.get("alpha") is not None:
+            details.append(f"alpha={format_number(config['alpha'])}")
+        if config.get("probability") is not None:
+            details.append(f"p={format_number(config['probability'])}")
+        if details:
+            return f"{base_label} ({', '.join(details)})"
+    return base_label
+
+
 def resolve_metrics_path(
     summary_path: Path,
     recorded_path: str | None,
@@ -358,15 +384,20 @@ def aggregate_runs(runs: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def build_matched_comparisons(runs: pd.DataFrame) -> pd.DataFrame:
-    """Pair proposal runs with their method-specific baseline and exact recipe."""
+def build_all_baseline_comparisons(runs: pd.DataFrame) -> pd.DataFrame:
+    """Pair each proposal run with every available baseline using its exact recipe.
+
+    The recipe fields must match so that the comparison remains controlled, but
+    the baseline augmentation is not restricted to the proposal's paired
+    counterpart. This produces one comparison row for each available
+    ``proposal × baseline`` pair.
+    """
     rows: list[dict[str, Any]] = []
     for proposal in runs[runs["augmentation"].isin(PROPOSAL_TO_BASELINE)].itertuples(
         index=False
     ):
-        baseline_method = PROPOSAL_TO_BASELINE[proposal.augmentation]
         candidates = runs[
-            (runs["augmentation"] == baseline_method)
+            (runs["augmentation"].isin(BASELINE_AUGMENTATIONS))
             & (runs["recipe_key"] == proposal.recipe_key)
         ]
 
@@ -412,6 +443,11 @@ def build_matched_comparisons(runs: pd.DataFrame) -> pd.DataFrame:
             "train_seed",
         ]
     ).reset_index(drop=True)
+
+
+def build_matched_comparisons(runs: pd.DataFrame) -> pd.DataFrame:
+    """Backward-compatible alias for all recipe-matched baseline comparisons."""
+    return build_all_baseline_comparisons(runs)
 
 
 def load_epoch_metrics(runs: pd.DataFrame) -> pd.DataFrame:
@@ -487,16 +523,29 @@ def plot_matched_test_accuracy(
     comparisons: pd.DataFrame,
     output_dir: Path,
 ) -> bool:
-    """Draw a dumbbell chart for the available direct comparisons."""
+    """Draw connected baseline/proposal points with an explicit delta."""
     if comparisons.empty:
         return False
 
     grouped = aggregate_matched_comparisons(comparisons)
+    grouped = grouped.sort_values(
+        [
+            "dataset",
+            "model",
+            "k",
+            "proposal_series_key",
+            "baseline_augmentation",
+            "baseline_series_key",
+        ]
+    )
 
-    height = max(3.8, 1.1 * len(grouped) + 2.2)
-    fig, ax = plt.subplots(figsize=(10.5, height))
+    height = max(6.0, 0.64 * len(grouped) + 2.4)
+    fig, ax = plt.subplots(figsize=(13.5, height))
     y_positions = np.arange(len(grouped))[::-1]
     observed_max = 0.0
+    baseline_series_counts = grouped.groupby("baseline_augmentation")[
+        "baseline_series_key"
+    ].nunique()
 
     for y, row in zip(y_positions, grouped.itertuples(index=False)):
         baseline_pct = 100.0 * row.baseline_mean
@@ -554,31 +603,31 @@ def plot_matched_test_accuracy(
         ax.annotate(
             f"{baseline_pct:.2f}%",
             (baseline_pct, y),
-            xytext=(0, -13),
+            xytext=(0, -12),
             textcoords="offset points",
             ha="center",
             va="top",
-            fontsize=9,
+            fontsize=8.5,
             color="#333333",
         )
         ax.annotate(
             f"{proposal_pct:.2f}%",
             (proposal_pct, y),
-            xytext=(0, 12),
+            xytext=(0, 11),
             textcoords="offset points",
             ha="center",
             va="bottom",
-            fontsize=9,
+            fontsize=8.5,
             color="#333333",
         )
 
-    right_edge = min(100.0, max(20.0, math.ceil((observed_max + 12.0) / 5.0) * 5.0))
+    right_edge = min(100.0, max(20.0, math.ceil((observed_max + 13.0) / 5.0) * 5.0))
     for y, row in zip(y_positions, grouped.itertuples(index=False)):
         delta_text = f"Δ {row.delta_mean_pp:+.2f} pp"
         if row.pairs > 1:
             delta_text += f" ± {row.delta_std_pp:.2f}"
         ax.text(
-            right_edge - 0.8,
+            right_edge - 0.7,
             y,
             delta_text,
             ha="right",
@@ -587,77 +636,99 @@ def plot_matched_test_accuracy(
             color="#222222",
         )
 
-    labels = []
+    labels: list[str] = []
     for row in grouped.itertuples(index=False):
-        label = f"{friendly_model(row.model)} · k={row.k}"
-        duplicates = grouped[
-            (grouped["dataset"] == row.dataset)
-            & (grouped["model"] == row.model)
-            & (grouped["k"] == row.k)
-        ]
-        if len(duplicates) > 1:
-            label += f"\n{row.proposal_series_label}"
-        labels.append(label)
+        baseline_label = row.baseline_label
+        if baseline_series_counts[row.baseline_augmentation] > 1:
+            baseline_label = configured_series_label(
+                baseline_label,
+                row.baseline_augmentation,
+                row.baseline_series_key,
+            )
+        labels.append(
+            f"{friendly_model(row.model)} · k={row.k}\n"
+            f"{row.proposal_series_label} vs {baseline_label}"
+        )
 
     ax.set_yticks(y_positions)
-    ax.set_yticklabels(labels)
+    ax.set_yticklabels(labels, fontsize=8.5)
     ax.set_xlim(0.0, right_edge)
     ax.set_ylim(-0.65, len(grouped) - 0.35)
     ax.set_xlabel("Test accuracy (%) at the best-validation checkpoint")
     ax.grid(axis="x")
     ax.set_axisbelow(True)
-    ax.set_title(
-        "Available matched proposal–baseline comparisons",
-        loc="left",
-        fontsize=15,
-        pad=34,
+    fig.suptitle(
+        "Proposal versus all recipe-matched baselines",
+        y=0.994,
+        fontsize=16,
+        fontweight="bold",
     )
-    ax.text(
-        0.0,
-        1.025,
-        "Matched training recipe; augmentation-specific settings remain method-specific",
-        transform=ax.transAxes,
-        ha="left",
-        va="bottom",
+    fig.text(
+        0.5,
+        0.978,
+        "Connected points show baseline → proposal; Δ = proposal − baseline",
+        ha="center",
+        va="top",
         color="#555555",
         fontsize=9.5,
     )
 
-    first = grouped.iloc[0]
-    legend_handles = [
-        Line2D(
-            [0],
-            [0],
-            marker=MARKERS[first["baseline_augmentation"]],
-            color="none",
-            markerfacecolor=COLORS[first["baseline_augmentation"]],
-            markeredgecolor="white",
-            markersize=9,
-            label=first["baseline_label"],
-        ),
-        Line2D(
-            [0],
-            [0],
-            marker=MARKERS[first["proposal_augmentation"]],
-            color="none",
-            markerfacecolor=COLORS[first["proposal_augmentation"]],
-            markeredgecolor="white",
-            markersize=9,
-            label=first["proposal_label"],
-        ),
-    ]
-    ax.legend(handles=legend_handles, loc="upper left", bbox_to_anchor=(0.0, 1.0), ncol=2)
+    legend_items: list[Line2D] = []
+    seen: set[tuple[str, str]] = set()
+    for row in grouped.itertuples(index=False):
+        for role, method, series_key, label in (
+            (
+                "baseline",
+                row.baseline_augmentation,
+                row.baseline_series_key,
+                row.baseline_label,
+            ),
+            (
+                "proposal",
+                row.proposal_augmentation,
+                row.proposal_series_key,
+                row.proposal_series_label,
+            ),
+        ):
+            key = (method, series_key)
+            if key in seen:
+                continue
+            seen.add(key)
+            if role == "baseline" and baseline_series_counts[method] > 1:
+                label = configured_series_label(label, method, series_key)
+            legend_items.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker=MARKERS[method],
+                    color="none",
+                    markerfacecolor=COLORS[method],
+                    markeredgecolor="white",
+                    markersize=8,
+                    label=label,
+                )
+            )
+    fig.legend(
+        handles=legend_items,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.952),
+        ncol=min(4, max(1, len(legend_items))),
+        fontsize=8.5,
+        frameon=False,
+        columnspacing=1.4,
+        handletextpad=0.4,
+    )
 
     if grouped["pairs"].max() == 1:
         fig.text(
             0.5,
             0.01,
-            "All displayed comparisons currently contain one paired run; no uncertainty interval is estimable.",
+            "All displayed comparisons currently contain one run; no uncertainty interval is estimable.",
             ha="center",
             color="#555555",
             fontsize=9,
         )
-    fig.tight_layout(rect=(0.0, 0.04, 1.0, 1.0))
+    fig.tight_layout(rect=(0.0, 0.04, 1.0, 0.90))
     save_figure(fig, output_dir / "matched_test_accuracy.png")
     return True
 
@@ -768,14 +839,14 @@ def plot_matched_test_accuracy_bars(
     ax.set_xticklabels(labels)
     ax.set_ylabel("Test accuracy (%) at the best-validation checkpoint")
     ax.set_title(
-        "Matched proposal–baseline test accuracy",
+        "Pairwise proposal-versus-baseline test accuracy",
         fontsize=15,
         pad=28,
     )
     ax.text(
         0.5,
         1.015,
-        "Bar-chart alternative; matched training recipe and method-specific augmentation settings",
+        "All available baselines with the same recorded training recipe",
         transform=ax.transAxes,
         ha="center",
         va="bottom",
@@ -824,7 +895,7 @@ def plot_matched_validation_curves(
     epoch_metrics: pd.DataFrame,
     output_dir: Path,
 ) -> bool:
-    """Plot validation trajectories only where a matched baseline exists."""
+    """Plot each proposal trajectory against every recipe-matched baseline."""
     if comparisons.empty or epoch_metrics.empty:
         return False
 
@@ -832,11 +903,9 @@ def plot_matched_validation_curves(
         "dataset",
         "model",
         "k",
-        "baseline_augmentation",
-        "baseline_label",
-        "baseline_series_key",
         "proposal_augmentation",
         "proposal_label",
+        "proposal_series_label",
         "proposal_series_key",
     ]
     panels = comparisons[panel_columns].drop_duplicates().sort_values(
@@ -858,33 +927,57 @@ def plot_matched_validation_curves(
             (comparisons["dataset"] == panel.dataset)
             & (comparisons["model"] == panel.model)
             & (comparisons["k"] == panel.k)
-            & (comparisons["baseline_series_key"] == panel.baseline_series_key)
             & (comparisons["proposal_series_key"] == panel.proposal_series_key)
         ]
-        baseline_ids = panel_pairs["baseline_run_id"].unique()
         proposal_ids = panel_pairs["proposal_run_id"].unique()
-        delta = panel_pairs["delta_test_pp"].mean()
+        best_baseline = panel_pairs["baseline_test_acc"].max()
+        proposal_test = panel_pairs["proposal_test_acc"].iloc[0]
+        delta = 100.0 * (proposal_test - best_baseline)
 
-        series_specs = [
+        series_specs: list[tuple[Any, ...]] = []
+        baseline_specs = (
+            panel_pairs[
+                ["baseline_augmentation", "baseline_label", "baseline_series_key"]
+            ]
+            .drop_duplicates()
+            .sort_values(
+                ["baseline_augmentation", "baseline_series_key"],
+                key=lambda column: column.map(method_sort_key)
+                if column.name == "baseline_augmentation"
+                else column,
+            )
+        )
+        for baseline in baseline_specs.itertuples(index=False):
+            baseline_ids = panel_pairs[
+                (panel_pairs["baseline_augmentation"] == baseline.baseline_augmentation)
+                & (panel_pairs["baseline_series_key"] == baseline.baseline_series_key)
+            ]["baseline_run_id"].unique()
+            series_specs.append(
+                (
+                    baseline.baseline_label,
+                    baseline.baseline_augmentation,
+                    baseline_ids,
+                    "--",
+                    "baseline_best_epoch",
+                    "baseline_best_val_acc",
+                    -20,
+                    baseline.baseline_series_key,
+                    "baseline",
+                )
+            )
+        series_specs.append(
             (
-                panel.baseline_label,
-                panel.baseline_augmentation,
-                baseline_ids,
-                "--",
-                "baseline_best_epoch",
-                "baseline_best_val_acc",
-                -20,
-            ),
-            (
-                panel.proposal_label,
+                panel.proposal_series_label,
                 panel.proposal_augmentation,
                 proposal_ids,
                 "-",
                 "proposal_best_epoch",
                 "proposal_best_val_acc",
                 15,
-            ),
-        ]
+                panel.proposal_series_key,
+                "proposal",
+            )
+        )
         panel_curve_max = 0.0
         for (
             label,
@@ -894,6 +987,8 @@ def plot_matched_validation_curves(
             checkpoint_epoch_column,
             checkpoint_value_column,
             label_y_offset,
+            comparison_series_key,
+            role,
         ) in series_specs:
             subset = epoch_metrics[epoch_metrics["run_id"].isin(run_ids)]
             curve = (
@@ -931,7 +1026,13 @@ def plot_matched_validation_curves(
                     linewidth=0,
                 )
 
-            checkpoint_rows = panel_pairs[
+            if role == "baseline":
+                checkpoint_source = panel_pairs[
+                    panel_pairs["baseline_series_key"] == comparison_series_key
+                ]
+            else:
+                checkpoint_source = panel_pairs
+            checkpoint_rows = checkpoint_source[
                 [checkpoint_epoch_column, checkpoint_value_column]
             ].drop_duplicates()
             for checkpoint in checkpoint_rows.itertuples(index=False, name=None):
@@ -948,7 +1049,16 @@ def plot_matched_validation_curves(
                     zorder=4,
                 )
 
-            if len(checkpoint_rows) == 1:
+            annotate_checkpoint = role == "proposal"
+            if role == "baseline":
+                baseline_test_values = panel_pairs[
+                    panel_pairs["baseline_series_key"] == comparison_series_key
+                ]["baseline_test_acc"]
+                annotate_checkpoint = (
+                    not baseline_test_values.empty
+                    and np.isclose(float(baseline_test_values.iloc[0]), best_baseline)
+                )
+            if len(checkpoint_rows) == 1 and annotate_checkpoint:
                 checkpoint_epoch = int(checkpoint_rows.iloc[0, 0])
                 checkpoint_value = 100.0 * float(checkpoint_rows.iloc[0, 1])
                 max_epoch = float(curve["epoch"].max())
@@ -985,7 +1095,7 @@ def plot_matched_validation_curves(
 
         ax.set_title(
             f"{friendly_model(panel.model)} · {friendly_dataset(panel.dataset)} · k={panel.k}\n"
-            f"Test difference: {delta:+.2f} pp",
+            f"Difference versus best baseline: {delta:+.2f} pp",
             fontsize=11,
         )
         ax.set_xlabel("Epoch")
@@ -1013,7 +1123,13 @@ def panel_series_label(panel: pd.DataFrame, row: pd.Series) -> str:
     method_configs = panel.loc[
         panel["augmentation"] == row["augmentation"], "series_key"
     ].nunique()
-    return row["series_label"] if method_configs > 1 else row["method_name"]
+    if method_configs > 1:
+        return configured_series_label(
+            row["method_name"],
+            row["augmentation"],
+            row["series_key"],
+        )
+    return row["method_name"]
 
 
 def spread_label_positions(
@@ -1054,7 +1170,7 @@ def plot_available_test_accuracy(
     aggregated: pd.DataFrame,
     output_dir: Path,
 ) -> bool:
-    """Plot all active test results without imputing missing experiments."""
+    """Draw grouped bars for all active test results without imputing gaps."""
     if aggregated.empty:
         return False
 
@@ -1069,7 +1185,7 @@ def plot_available_test_accuracy(
     fig, axes = plt.subplots(
         n_rows,
         n_cols,
-        figsize=(6.5 * n_cols, 4.8 * n_rows),
+        figsize=(7.2 * n_cols, 5.4 * n_rows),
         squeeze=False,
     )
     axes_flat = axes.flatten()
@@ -1083,7 +1199,7 @@ def plot_available_test_accuracy(
         x_lookup = {k: index for index, k in enumerate(k_values)}
 
         series_order = (
-            panel[["augmentation", "series_key"]]
+            panel[["augmentation", "series_key", "series_label"]]
             .drop_duplicates()
             .assign(
                 sort_key=lambda frame: frame["augmentation"].map(
@@ -1092,44 +1208,58 @@ def plot_available_test_accuracy(
             )
             .sort_values(["sort_key", "series_key"])
         )
-        point_labels: list[dict[str, Any]] = []
+        x = np.arange(len(k_values), dtype=float)
+        n_series = len(series_order)
+        width = min(0.18, 0.82 / max(1, n_series))
+        offsets = (np.arange(n_series) - (n_series - 1) / 2) * width
 
-        for series in series_order.itertuples(index=False):
+        for offset, series in zip(offsets, series_order.itertuples(index=False)):
             subset = panel[
                 (panel["augmentation"] == series.augmentation)
                 & (panel["series_key"] == series.series_key)
             ].sort_values("k")
             row0 = subset.iloc[0]
-            x = np.array([x_lookup[value] for value in subset["k"]], dtype=float)
-            y = 100.0 * subset["mean_test_acc"].to_numpy()
             label = panel_series_label(panel, row0)
-
-            if len(subset) > 1:
-                ax.plot(
-                    x,
-                    y,
-                    color=COLORS.get(series.augmentation, "#777777"),
-                    linewidth=1.8,
-                    alpha=0.9,
-                )
-            ax.scatter(
-                x,
-                y,
-                s=65,
-                marker=MARKERS.get(series.augmentation, "o"),
+            by_k = subset.set_index("k")
+            values = np.asarray(
+                [
+                    100.0 * float(by_k.loc[k, "mean_test_acc"])
+                    if k in by_k.index
+                    else np.nan
+                    for k in k_values
+                ],
+                dtype=float,
+            )
+            runs = np.asarray(
+                [
+                    float(by_k.loc[k, "runs"]) if k in by_k.index else np.nan
+                    for k in k_values
+                ],
+                dtype=float,
+            )
+            bars = ax.bar(
+                x + offset,
+                values,
+                width,
                 color=COLORS.get(series.augmentation, "#777777"),
                 edgecolor="white",
                 linewidth=0.8,
                 label=label,
                 zorder=3,
             )
-
-            repeated = subset["runs"] > 1
-            if repeated.any():
-                errors = 100.0 * subset["std_test_acc"].fillna(0.0).to_numpy()
+            errors = np.asarray(
+                [
+                    100.0 * float(by_k.loc[k, "std_test_acc"])
+                    if k in by_k.index and pd.notna(by_k.loc[k, "std_test_acc"])
+                    else np.nan
+                    for k in k_values
+                ],
+                dtype=float,
+            )
+            if np.isfinite(errors).any():
                 ax.errorbar(
-                    x,
-                    y,
+                    x + offset,
+                    values,
                     yerr=errors,
                     fmt="none",
                     ecolor=COLORS.get(series.augmentation, "#777777"),
@@ -1137,74 +1267,44 @@ def plot_available_test_accuracy(
                     linewidth=1.2,
                     zorder=2,
                 )
-
-            for x_value, y_value, runs in zip(x, y, subset["runs"]):
-                suffix = f", n={runs}" if runs > 1 else ""
-                point_labels.append(
-                    {
-                        "x": float(x_value),
-                        "y": float(y_value),
-                        "text": f"{y_value:.1f}{suffix}",
-                        "color": COLORS.get(series.augmentation, "#777777"),
-                    }
-                )
+            for bar, value, run_count in zip(bars, values, runs):
+                if np.isfinite(value):
+                    suffix = f"\n(n={int(run_count)})" if run_count > 1 else ""
+                    ax.text(
+                        bar.get_x() + bar.get_width() / 2,
+                        value + 0.8,
+                        f"{value:.1f}{suffix}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=7.5,
+                        rotation=90 if n_series > 4 else 0,
+                    )
 
         panel_max = 100.0 * panel["mean_test_acc"].max()
-        upper = min(100.0, max(20.0, math.ceil((panel_max + 8.0) / 10.0) * 10.0))
-        minimum_gap = max(1.25, upper * 0.035)
-        for x_value in sorted({point["x"] for point in point_labels}):
-            at_x = [point for point in point_labels if point["x"] == x_value]
-            label_positions = spread_label_positions(
-                [point["y"] for point in at_x],
-                minimum_gap=minimum_gap,
-                lower=1.0,
-                upper=upper - 1.0,
-            )
-            for point, label_y in zip(at_x, label_positions):
-                moved = abs(label_y - point["y"]) > 0.4
-                ax.annotate(
-                    point["text"],
-                    xy=(point["x"], point["y"]),
-                    xytext=(point["x"], label_y),
-                    textcoords="data",
-                    ha="center",
-                    va="center",
-                    fontsize=8,
-                    color="#333333",
-                    arrowprops=(
-                        {
-                            "arrowstyle": "-",
-                            "color": point["color"],
-                            "linewidth": 0.7,
-                            "alpha": 0.75,
-                        }
-                        if moved
-                        else None
-                    ),
-                )
+        upper = min(100.0, max(20.0, math.ceil((panel_max + 12.0) / 10.0) * 10.0))
 
         ax.set_ylim(0.0, upper)
-        ax.set_xticks(range(len(k_values)))
-        ax.set_xticklabels([str(value) for value in k_values])
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"k={value}" for value in k_values])
         ax.set_xlabel("Training examples per class (k)")
         ax.set_ylabel("Test accuracy (%)")
         ax.set_title(f"{friendly_model(combo.model)} · {friendly_dataset(combo.dataset)}")
         ax.grid(axis="y")
         ax.set_axisbelow(True)
-        ax.legend(loc="upper left", fontsize=8.5)
+        ax.legend(loc="upper left", fontsize=8.0)
 
     for ax in axes_flat[n_panels:]:
         ax.axis("off")
 
     fig.suptitle(
-        "All available active results",
+        "All available test accuracy by method and data budget",
         fontsize=15,
         y=1.02,
     )
     fig.text(
         0.5,
         0.005,
-        "Missing method–k combinations are not imputed. Values are test accuracy at the best-validation checkpoint.",
+        "Missing method–k combinations are not imputed; labels show test accuracy at the best-validation checkpoint.",
         ha="center",
         fontsize=9,
         color="#555555",
@@ -1346,14 +1446,12 @@ def main() -> None:
     configure_plot_style()
     runs = load_summary_metrics(experiments_dir)
     aggregated = aggregate_runs(runs)
-    comparisons = build_matched_comparisons(runs)
+    comparisons = build_all_baseline_comparisons(runs)
     epoch_metrics = load_epoch_metrics(runs)
 
     generated: list[str] = []
     if plot_matched_test_accuracy(comparisons, output_dir):
         generated.append("matched_test_accuracy.png")
-    if plot_matched_test_accuracy_bars(comparisons, output_dir):
-        generated.append("matched_test_accuracy_bars.png")
     if plot_matched_validation_curves(comparisons, epoch_metrics, output_dir):
         generated.append("matched_validation_curves.png")
     if plot_available_test_accuracy(aggregated, output_dir):
@@ -1362,7 +1460,7 @@ def main() -> None:
         generated.append("experiment_coverage.png")
 
     print(f"Loaded {len(runs)} active experiment summaries.")
-    print(f"Found {len(comparisons)} matched proposal-baseline run pairs.")
+    print(f"Found {len(comparisons)} proposal-baseline run pairs.")
     print(f"Generated {len(generated)} figures in {output_dir}:")
     for filename in generated:
         print(f"  - {filename}")
