@@ -39,15 +39,15 @@
     75
   ],
   "lr_gamma": 0.1,
-  "cutmix_prob": 1.0,
-  "config_id": "9f54d219",
+  "cutmix_prob": 0.5,
+  "config_id": "41c5c2ae",
   "num_train": 2000,
   "num_val": 5000,
   "num_test": 10000,
-  "best_epoch": 84,
-  "best_val_acc": 0.1296,
-  "test_loss_best_checkpoint": 3.857278582763672,
-  "test_acc_best_checkpoint": 0.1308,
-  "metrics_path": "results\\experiments\\cifar100\\resnet50\\k20\\cutmix\\e100_s0_t0_c9f54d219\\metrics.csv",
-  "best_model_path": "results\\experiments\\cifar100\\resnet50\\k20\\cutmix\\e100_s0_t0_c9f54d219\\checkpoint_best.pt"
+  "best_epoch": 82,
+  "best_val_acc": 0.1456,
+  "test_loss_best_checkpoint": 3.886029984664917,
+  "test_acc_best_checkpoint": 0.1489,
+  "metrics_path": "results\\experiments\\cifar100\\resnet50\\k20\\cutmix\\e100_s0_t0_c41c5c2ae\\metrics.csv",
+  "best_model_path": "results\\experiments\\cifar100\\resnet50\\k20\\cutmix\\e100_s0_t0_c41c5c2ae\\checkpoint_best.pt"
 }
