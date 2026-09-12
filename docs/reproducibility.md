@@ -200,7 +200,7 @@ Generate the current comparison figures with:
 python src\graphs\plot_graphs.py
 ```
 
-By default, the command writes the four curated, versioned figures to
+By default, the command writes the five curated, versioned figures to
 `docs/figures/`. Review the regenerated images and commit them with the
 underlying result changes so the GitHub README remains synchronized with the
 experiment records. Use `--output-dir` for temporary local figures.
