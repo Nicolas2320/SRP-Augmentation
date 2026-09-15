@@ -10,7 +10,7 @@ Current v1 support
 ------------------
 - Dataset: CIFAR-10, CIFAR-100
 - Models: ResNet50, ViT
-- Augmentation: none, MixUp, CutMix, AugMix
+- Augmentation: raw (no crop/flip), none (crop+flip only), MixUp, CutMix, AugMix, SimMixUp, SimCutMix
 - k-shot split loading from generated split files, including the full post-validation pool
 - standard CIFAR random-crop and horizontal-flip training augmentation
 - SGD with Nesterov momentum and milestone learning-rate decay by default
@@ -76,7 +76,7 @@ RESNET50_INPUT_SIZE = 224
 
 DatasetName = Literal["cifar10", "cifar100"]
 ModelName = Literal["resnet50", "vit"]
-AugmentationName = Literal["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
+AugmentationName = Literal["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 
 
 @dataclass
@@ -299,6 +299,16 @@ def get_transforms(
     statistics to match what the pretrained weights expect. All spatial
     augmentation (crop/flip/AugMix) still runs on the native 32x32 image
     first; the resize is appended last since it commutes with normalization.
+
+    Augmentation tiers, from weakest to strongest:
+    - "raw": no crop, no flip, no mixing. The true no-augmentation baseline.
+    - "none": random-crop + horizontal-flip only, no batch mixing.
+    - "mixup" / "cutmix" / "augmix": classical methods, applied on top of the
+      same crop+flip pipeline as "none".
+    - "simmixup" / "simcutmix": proposed similarity-guided methods, also
+      applied on top of the same crop+flip pipeline as "none".
+    Only "raw" omits crop+flip; every other tier shares it so that
+    comparisons isolate the effect of the mixing strategy alone.
     """
     if model == "resnet50":
         mean, std = IMAGENET_MEAN, IMAGENET_STD
@@ -319,6 +329,16 @@ def get_transforms(
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
     ]
+
+    if augmentation == "raw":
+        train_transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std),
+                *resize,
+            ]
+        )
+        return train_transform, eval_transform
 
     if augmentation == "augmix":
         train_transform = transforms.Compose(
@@ -1243,7 +1263,7 @@ def parse_args() -> ExperimentConfig:
     '--augmentation',
     type=str,
     default='none',
-    choices=["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"],
+    choices=["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"],
     help='augmentation method'
     )
     parser.add_argument("--epochs", type=int, default=100)

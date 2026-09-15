@@ -93,6 +93,24 @@ class TrainingRecipeTests(unittest.TestCase):
                 self.assertEqual(eval_transform.transforms[-1].size, 224)
                 self.assertEqual(tuple(eval_transform.transforms[1].mean), IMAGENET_MEAN)
 
+    def test_raw_pipeline_has_no_crop_or_flip(self):
+        for model in ("vit", "resnet50"):
+            with self.subTest(model=model):
+                train_transform, eval_transform = get_transforms(
+                    "cifar100",
+                    augmentation="raw",
+                    seed=0,
+                    model=model,
+                )
+                train_names = [type(step).__name__ for step in train_transform.transforms]
+                self.assertNotIn("RandomCrop", train_names)
+                self.assertNotIn("RandomHorizontalFlip", train_names)
+                self.assertEqual(train_names[:2], ["ToTensor", "Normalize"])
+                self.assertEqual(
+                    [type(step).__name__ for step in train_transform.transforms],
+                    [type(step).__name__ for step in eval_transform.transforms],
+                )
+
     def test_optimizer_is_sgd_with_nesterov(self):
         config = training_config()
         optimizer = build_optimizer(config, nn.Linear(2, 2))

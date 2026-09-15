@@ -115,7 +115,7 @@ class PlotGraphDataTests(unittest.TestCase):
 
             self.assertTrue(runs["metrics_exists"].all())
             self.assertEqual(len(comparisons), 2)
-            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "No augmentation"})
+            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "Crop+Flip only"})
             cutmix = comparisons[comparisons["baseline_label"] == "CutMix"].iloc[0]
             self.assertAlmostEqual(cutmix["delta_test_pp"], 3.0)
             self.assertEqual(cutmix["proposal_label"], "SimCutMix")

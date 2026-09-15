@@ -18,7 +18,8 @@ can similarity-guided mixing improve on standard baselines?
 
 | Family | Methods |
 |---|---|
-| Standard | None, MixUp, CutMix, AugMix |
+| No-augmentation baseline | Raw (no crop/flip, no mixing) |
+| Standard | None (crop+flip only), MixUp, CutMix, AugMix |
 | Proposed | SimMixUp, SimCutMix |
 | Optional guided strategies | Class-aware, class-agnostic, different-label, anchor-gated, and dynamic neighbor pools |
 
@@ -219,16 +220,20 @@ Supported models:
 
 Supported augmentations:
 
-- `none`
+- `raw` — no crop/flip, no mixing. The true no-augmentation baseline.
+- `none` — random crop + horizontal flip only, no mixing.
 - `mixup`
 - `cutmix`
 - `augmix`
 - `simmixup`
 - `simcutmix`
 
-Every training method starts with random crop and horizontal flip. Therefore,
-`--augmentation none` means no additional mixing method; spatial augmentation
-is still active.
+Every training method except `raw` starts with random crop and horizontal
+flip. Therefore, `--augmentation none` means no additional mixing method;
+spatial augmentation is still active. `mixup`, `cutmix`, `augmix`, `simmixup`,
+and `simcutmix` all apply their mixing on top of that same crop+flip
+pipeline, so `raw` is not a fair baseline to compare mixing methods against —
+it exists only to show the effect of crop+flip itself, isolated from mixing.
 
 Use `python src\train.py --help` for the complete option list.
 
