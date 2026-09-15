@@ -1118,6 +1118,209 @@ def plot_matched_validation_curves(
     return True
 
 
+def plot_matched_overfitting_gap(
+    comparisons: pd.DataFrame,
+    epoch_metrics: pd.DataFrame,
+    output_dir: Path,
+) -> bool:
+    """Plot the per-epoch train-minus-validation accuracy gap for each panel.
+
+    Uses the same panel layout and recipe-matched baseline set as
+    ``plot_matched_validation_curves``, but plots ``train_acc - val_acc``
+    instead of raw validation accuracy. A larger gap indicates more
+    memorization relative to what generalizes to the validation set.
+    """
+    if comparisons.empty or epoch_metrics.empty:
+        return False
+
+    gap_metrics = epoch_metrics.copy()
+    gap_metrics["gap"] = gap_metrics["train_acc"] - gap_metrics["val_acc"]
+
+    panel_columns = [
+        "dataset",
+        "model",
+        "k",
+        "proposal_augmentation",
+        "proposal_label",
+        "proposal_series_label",
+        "proposal_series_key",
+    ]
+    panels = comparisons[panel_columns].drop_duplicates().sort_values(
+        ["dataset", "model", "k", "proposal_series_key"]
+    )
+    n_panels = len(panels)
+    n_cols = min(2, n_panels)
+    n_rows = math.ceil(n_panels / n_cols)
+    fig, axes = plt.subplots(
+        n_rows,
+        n_cols,
+        figsize=(6.3 * n_cols, 4.2 * n_rows),
+        squeeze=False,
+    )
+    axes_flat = axes.flatten()
+
+    for ax, panel in zip(axes_flat, panels.itertuples(index=False)):
+        panel_pairs = comparisons[
+            (comparisons["dataset"] == panel.dataset)
+            & (comparisons["model"] == panel.model)
+            & (comparisons["k"] == panel.k)
+            & (comparisons["proposal_series_key"] == panel.proposal_series_key)
+        ]
+        proposal_ids = panel_pairs["proposal_run_id"].unique()
+
+        series_specs: list[tuple[Any, ...]] = []
+        baseline_specs = (
+            panel_pairs[
+                ["baseline_augmentation", "baseline_label", "baseline_series_key"]
+            ]
+            .drop_duplicates()
+            .sort_values(
+                ["baseline_augmentation", "baseline_series_key"],
+                key=lambda column: column.map(method_sort_key)
+                if column.name == "baseline_augmentation"
+                else column,
+            )
+        )
+        for baseline in baseline_specs.itertuples(index=False):
+            baseline_ids = panel_pairs[
+                (panel_pairs["baseline_augmentation"] == baseline.baseline_augmentation)
+                & (panel_pairs["baseline_series_key"] == baseline.baseline_series_key)
+            ]["baseline_run_id"].unique()
+            series_specs.append(
+                (
+                    baseline.baseline_label,
+                    baseline.baseline_augmentation,
+                    baseline_ids,
+                    "--",
+                    "baseline_best_epoch",
+                    baseline.baseline_series_key,
+                    "baseline",
+                )
+            )
+        series_specs.append(
+            (
+                panel.proposal_series_label,
+                panel.proposal_augmentation,
+                proposal_ids,
+                "-",
+                "proposal_best_epoch",
+                panel.proposal_series_key,
+                "proposal",
+            )
+        )
+
+        panel_min = 0.0
+        panel_max = 0.0
+        for (
+            label,
+            method,
+            run_ids,
+            line_style,
+            checkpoint_epoch_column,
+            comparison_series_key,
+            role,
+        ) in series_specs:
+            subset = gap_metrics[gap_metrics["run_id"].isin(run_ids)]
+            curve = (
+                subset.groupby("epoch", as_index=False)
+                .agg(
+                    mean_gap=("gap", "mean"),
+                    std_gap=("gap", "std"),
+                    runs=("run_id", "nunique"),
+                )
+                .sort_values("epoch")
+            )
+            if curve.empty:
+                continue
+
+            x = curve["epoch"].to_numpy()
+            y = 100.0 * curve["mean_gap"].to_numpy()
+            panel_min = min(panel_min, float(np.nanmin(y)))
+            panel_max = max(panel_max, float(np.nanmax(y)))
+            run_count = len(run_ids)
+            ax.plot(
+                x,
+                y,
+                color=COLORS[method],
+                linewidth=2.0,
+                linestyle=line_style,
+                label=f"{label} (n={run_count})",
+            )
+            if run_count > 1:
+                std = 100.0 * curve["std_gap"].fillna(0.0).to_numpy()
+                ax.fill_between(
+                    x,
+                    y - std,
+                    y + std,
+                    color=COLORS[method],
+                    alpha=0.14,
+                    linewidth=0,
+                )
+
+            if role == "baseline":
+                checkpoint_source = panel_pairs[
+                    panel_pairs["baseline_series_key"] == comparison_series_key
+                ]
+            else:
+                checkpoint_source = panel_pairs
+            checkpoint_epochs = (
+                checkpoint_source[checkpoint_epoch_column].drop_duplicates().tolist()
+            )
+            curve_by_epoch = curve.set_index("epoch")["mean_gap"]
+            for checkpoint_epoch in checkpoint_epochs:
+                checkpoint_epoch = int(checkpoint_epoch)
+                if checkpoint_epoch not in curve_by_epoch.index:
+                    continue
+                checkpoint_value = 100.0 * float(curve_by_epoch.loc[checkpoint_epoch])
+                ax.scatter(
+                    checkpoint_epoch,
+                    checkpoint_value,
+                    s=115,
+                    marker="*",
+                    color=COLORS[method],
+                    edgecolor="white",
+                    linewidth=0.8,
+                    zorder=4,
+                )
+
+        ax.axhline(0.0, color="#999999", linewidth=1.0, linestyle=":")
+        ax.set_title(
+            f"{friendly_model(panel.model)} · {friendly_dataset(panel.dataset)} · k={panel.k}\n"
+            f"{panel.proposal_series_label}",
+            fontsize=11,
+        )
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Train − validation accuracy (pp)")
+        pad = max(4.0, 0.1 * (panel_max - panel_min))
+        ax.set_ylim(panel_min - pad, panel_max + pad)
+        ax.grid()
+        ax.set_axisbelow(True)
+        ax.legend(loc="upper left", fontsize=8.0)
+
+    for ax in axes_flat[n_panels:]:
+        ax.axis("off")
+
+    fig.suptitle(
+        "Train − validation accuracy gap through training",
+        fontsize=15,
+        y=1.02,
+    )
+    fig.text(
+        0.5,
+        0.01,
+        "Stars mark each run's best-validation checkpoint. Train accuracy under "
+        "MixUp/CutMix/SimMixUp/SimCutMix uses partial-credit mixed-label accuracy "
+        "(as in the original papers), so it is not directly comparable in absolute "
+        "terms to clean-label 'No augmentation' train accuracy.",
+        ha="center",
+        fontsize=8.0,
+        color="#555555",
+    )
+    fig.tight_layout(rect=(0.0, 0.05, 1.0, 1.0))
+    save_figure(fig, output_dir / "matched_overfitting_gap.png")
+    return True
+
+
 def panel_series_label(panel: pd.DataFrame, row: pd.Series) -> str:
     """Use detailed labels only if a method has multiple configurations."""
     method_configs = panel.loc[
@@ -1454,6 +1657,8 @@ def main() -> None:
         generated.append("matched_test_accuracy.png")
     if plot_matched_validation_curves(comparisons, epoch_metrics, output_dir):
         generated.append("matched_validation_curves.png")
+    if plot_matched_overfitting_gap(comparisons, epoch_metrics, output_dir):
+        generated.append("matched_overfitting_gap.png")
     if plot_available_test_accuracy(aggregated, output_dir):
         generated.append("available_test_accuracy_vs_k.png")
     if plot_experiment_coverage(runs, output_dir):

@@ -74,6 +74,18 @@ corresponding test measurements.
 
 ![Matched validation trajectories](docs/figures/matched_validation_curves.png)
 
+### Train-versus-validation accuracy gap
+
+This view plots the per-epoch gap between training and validation accuracy for
+each proposal panel alongside every matched baseline. A larger gap indicates
+more memorization relative to what generalizes to validation. Stars mark each
+run's best-validation checkpoint. Train accuracy under MixUp, CutMix,
+SimMixUp, and SimCutMix uses partial-credit mixed-label accuracy (as in the
+original papers), so it is not directly comparable in absolute terms to
+clean-label "No augmentation" train accuracy.
+
+![Train-versus-validation accuracy gap](docs/figures/matched_overfitting_gap.png)
+
 The [coverage matrix](docs/figures/experiment_coverage.png) provides the
 complete experiment-status view, including missing cells and run counts.
 
@@ -294,11 +306,12 @@ Generate the standard comparison figures from saved summaries and metrics:
 python src\graphs\plot_graphs.py
 ```
 
-The plotting suite writes four views to `docs/figures/` by default. These
+The plotting suite writes five views to `docs/figures/` by default. These
 curated figures are versioned and displayed in this README:
 
 - matched proposal-versus-baseline test accuracy;
 - validation curves for those matched comparisons;
+- the train-versus-validation accuracy gap for those matched comparisons;
 - all available active test results, without filling missing cells; and
 - a coverage matrix with the run count in every method/k cell.
 
