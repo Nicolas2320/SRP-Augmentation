@@ -2,8 +2,9 @@
 
 SRP-Augmentation is a research codebase for comparing image augmentation
 methods in low-data image classification. It supports controlled CIFAR-10 and
-CIFAR-100 experiments with reproducible k-shot subsets, CIFAR-adapted ResNet50
-and ViT models, standard augmentation baselines, and similarity-guided mixing.
+CIFAR-100 experiments with reproducible k-shot subsets, an ImageNet-pretrained
+ResNet50 (fine-tuned at 224x224) and a CIFAR-adapted ViT, standard augmentation
+baselines, and similarity-guided mixing.
 
 The project is a Student Research Project at the University of Hildesheim.
 
@@ -46,6 +47,13 @@ The original project proposal is available at
 The figures below are generated from the tracked experiment summaries and
 epoch metrics by `src/graphs/plot_graphs.py`. They are committed so GitHub
 always shows the current evidence alongside the underlying records.
+
+**Note (2026-09-15):** ResNet50 switched from training from scratch to an
+ImageNet-pretrained ResNet50 fine-tuned at 224x224 (see
+[Project Status](docs/project_status.md)). The ResNet50 results shown below
+predate that switch and have been archived; the canonical tree currently has
+no ResNet50 results until the pretrained recipe is re-run and these figures
+are regenerated.
 
 ### Direct proposal-versus-baseline comparisons
 
@@ -186,6 +194,18 @@ ResNet50 CutMix experiment:
 ```powershell
 python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
+
+**ResNet50 is ImageNet-pretrained and fine-tuned at 224x224** (see
+`src/models/resnet.py`); the CLI defaults above were tuned for training from
+scratch at 32x32 and were not re-tuned for fine-tuning a pretrained model.
+Before a full run, consider:
+
+- Lowering `--lr` (e.g. `0.01`): `0.1` is a large step for fine-tuning
+  pretrained weights and can destroy them in the first few epochs.
+- Lowering `--batch-size` if you hit an out-of-memory error: 224x224 inputs use
+  roughly 49x the memory per image of the previous 32x32 pipeline.
+- Expecting substantially longer wall-clock time per epoch for the same
+  reason.
 
 Supported datasets:
 

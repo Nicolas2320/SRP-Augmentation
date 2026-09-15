@@ -53,7 +53,7 @@ flowchart LR
 | `src/augmentations/` | Standard and similarity-guided augmentation implementations. |
 | `src/data/make_splits.py` | Deterministic validation and k-shot split generation. |
 | `src/data/indexed_dataset.py` | Dataset wrappers that preserve original CIFAR indices and sample guided pairs. |
-| `src/models/` | CIFAR-adapted ResNet50 and ViT builders. |
+| `src/models/` | ImageNet-pretrained ResNet50 (fine-tuned at 224x224) and CIFAR-adapted ViT builders. |
 | `src/proposal/compute_embeddings.py` | Computes ImageNet-encoder embeddings for the selected training subset. |
 | `src/proposal/build_neighbors.py` | Builds exact filtered neighbor sets from saved embeddings. |
 | `src/proposal/inspect_neighbors.py` | Validates embedding and neighbor payloads. |

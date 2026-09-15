@@ -70,6 +70,10 @@ CIFAR10_STD = (0.2470, 0.2435, 0.2616)
 CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
 CIFAR100_STD = (0.2675, 0.2565, 0.2761)
 
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+RESNET50_INPUT_SIZE = 224
+
 DatasetName = Literal["cifar10", "cifar100"]
 ModelName = Literal["resnet50", "vit"]
 AugmentationName = Literal["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
@@ -286,14 +290,28 @@ def get_transforms(
     dataset: str,
     augmentation: str,
     seed: int,
+    model: str,
 ) -> tuple[transforms.Compose, transforms.Compose]:
-    """Return train and evaluation transforms."""
-    mean, std = get_dataset_stats(dataset)
+    """Return train and evaluation transforms.
+
+    ResNet50 is an ImageNet-pretrained model (see build_resnet50_cifar), so
+    its pipeline is resized to 224x224 and normalized with ImageNet
+    statistics to match what the pretrained weights expect. All spatial
+    augmentation (crop/flip/AugMix) still runs on the native 32x32 image
+    first; the resize is appended last since it commutes with normalization.
+    """
+    if model == "resnet50":
+        mean, std = IMAGENET_MEAN, IMAGENET_STD
+        resize = [transforms.Resize(RESNET50_INPUT_SIZE, antialias=True)]
+    else:
+        mean, std = get_dataset_stats(dataset)
+        resize = []
 
     eval_transform = transforms.Compose(
         [
             transforms.ToTensor(),
             transforms.Normalize(mean, std),
+            *resize,
         ]
     )
 
@@ -315,6 +333,7 @@ def get_transforms(
                     alpha=1.0,
                     seed=seed,
                 ),
+                *resize,
             ]
         )
         return train_transform, eval_transform
@@ -325,6 +344,7 @@ def get_transforms(
                 *spatial_augmentation,
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
+                *resize,
             ]
         )
         return train_transform, eval_transform
@@ -487,6 +507,7 @@ def build_dataloaders(
         dataset=config.dataset,
         augmentation=config.augmentation,
         seed=config.train_seed,
+        model=config.model,
     )
 
     DatasetClass = get_dataset_class(config.dataset)

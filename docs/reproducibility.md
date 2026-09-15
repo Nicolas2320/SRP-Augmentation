@@ -105,6 +105,13 @@ For example:
 python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --mixup-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
 
+As of 2026-09-15, `--model resnet50` builds an ImageNet-pretrained ResNet50
+fine-tuned at 224x224 (see `src/models/resnet.py`), not the earlier
+from-scratch CIFAR-adapted model. The `--lr`, `--batch-size`, and runtime
+expectations above were tuned for the retired from-scratch recipe; see the
+caution note in the README's "Run a Standard Experiment" section before
+reproducing a ResNet50 run with these exact values.
+
 Although `--mixup-alpha` is included in some shared command templates, it does
 not affect baseline CutMix; `--cutmix-prob` is the relevant CutMix-specific
 parameter.

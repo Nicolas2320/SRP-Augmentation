@@ -23,6 +23,14 @@ scores were moved to the external `historical_no_lr_schedule` archive on
 2026-07-26. The move and destination are recorded in
 `artifact_cleanup_log.json`.
 
+On 2026-09-15, ResNet50 switched from training from scratch to an
+ImageNet-pretrained ResNet50 fine-tuned at 224x224 (see `src/models/resnet.py`
+and `get_transforms` in `src/train.py`). All from-scratch ResNet50 CIFAR-100
+results (19 runs) were moved to the external `resnet50_from_scratch` archive,
+since they are no longer comparable to the new pretrained recipe. The move and
+destination are recorded in `artifact_cleanup_log.json`. The canonical tree
+currently has no ResNet50 results until the pretrained recipe is re-run.
+
 ## Completed Run Contract
 
 A completed canonical run has:
@@ -81,6 +89,13 @@ archived-only neighbor support. Do not mix archived results with active
 scheduled-training results unless the comparison explicitly uses the same
 recipe.
 
+All 19 from-scratch ResNet50 runs that were still in the active canonical tree
+were subsequently moved under `SRP-old_experiments/resnet50_from_scratch` on
+2026-09-15, alongside a snapshot of `manifest.csv` from just before the move.
+Do not compare those archived from-scratch numbers against new
+ImageNet-pretrained ResNet50 runs; they used a different architecture, input
+resolution, and normalization and are not scientifically comparable.
+
 ## Guided Setting Components
 
 Guided run paths encode the settings most useful during browsing:
@@ -116,9 +131,9 @@ Regenerate it after adding or moving run records:
 python src\experiments\build_manifest.py
 ```
 
-As of the 2026-07-26 archive cleanup, the canonical tree and manifest both
-contain 20 experiments with unique IDs: 8 scheduled-training ResNet50 runs and
-12 ViT baseline runs.
+As of the 2026-09-15 ResNet50 archive move, the canonical tree and manifest
+contain only ViT runs (19 as of this writing). ResNet50 runs will reappear
+once the ImageNet-pretrained recipe is trained.
 
 Do not edit the manifest manually. Correct the source summary or the manifest
 builder instead.

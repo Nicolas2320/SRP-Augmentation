@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.train import (
+    IMAGENET_MEAN,
     ExperimentConfig,
     build_lr_scheduler,
     build_optimizer,
@@ -68,11 +69,29 @@ class TrainingRecipeTests(unittest.TestCase):
                     "cifar100",
                     augmentation=augmentation,
                     seed=0,
+                    model="vit",
                 )
                 train_names = [type(step).__name__ for step in train_transform.transforms]
                 eval_names = [type(step).__name__ for step in eval_transform.transforms]
                 self.assertEqual(train_names[:2], ["RandomCrop", "RandomHorizontalFlip"])
                 self.assertEqual(eval_names, ["ToTensor", "Normalize"])
+
+    def test_resnet50_pipeline_resizes_to_224_with_imagenet_stats(self):
+        for augmentation in ("none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"):
+            with self.subTest(augmentation=augmentation):
+                train_transform, eval_transform = get_transforms(
+                    "cifar100",
+                    augmentation=augmentation,
+                    seed=0,
+                    model="resnet50",
+                )
+                train_names = [type(step).__name__ for step in train_transform.transforms]
+                eval_names = [type(step).__name__ for step in eval_transform.transforms]
+                self.assertEqual(train_names[:2], ["RandomCrop", "RandomHorizontalFlip"])
+                self.assertEqual(train_names[-1], "Resize")
+                self.assertEqual(eval_names, ["ToTensor", "Normalize", "Resize"])
+                self.assertEqual(eval_transform.transforms[-1].size, 224)
+                self.assertEqual(tuple(eval_transform.transforms[1].mean), IMAGENET_MEAN)
 
     def test_optimizer_is_sgd_with_nesterov(self):
         config = training_config()

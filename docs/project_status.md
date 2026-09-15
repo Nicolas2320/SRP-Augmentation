@@ -2,6 +2,16 @@
 
 Last verified: 2026-07-26
 
+**2026-09-15 update:** ResNet50 switched from training from scratch
+(`weights=None`, CIFAR-adapted stem) to an ImageNet-pretrained ResNet50
+fine-tuned at 224x224, per supervisor feedback. All 19 from-scratch ResNet50
+CIFAR-100 results below are superseded and were archived to
+`../SRP-old_experiments/resnet50_from_scratch/` (see
+`results/experiments/artifact_cleanup_log.json`). The active canonical tree
+currently has no ResNet50 results until the pretrained recipe is re-run; the
+ResNet50 numbers in this file predate that switch and are kept only as a
+historical record.
+
 ## Current Stage
 
 The repository is in the focused experimental-comparison stage. The data,
