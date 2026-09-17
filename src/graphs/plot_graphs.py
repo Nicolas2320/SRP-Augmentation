@@ -184,19 +184,26 @@ def augmentation_configuration(data: dict[str, Any]) -> dict[str, Any]:
         return {"alpha": data.get("mixup_alpha")}
     if method == "cutmix":
         return {
-            "alpha": data.get("mixup_alpha"),
+            # Older summaries predate the explicit field; baseline CutMix was
+            # hardcoded to alpha=1.0 in those runs.
+            "alpha": data.get("cutmix_alpha", 1.0),
             "probability": data.get("cutmix_prob"),
         }
     if method == "augmix":
         # Current summaries do not expose AugMix-specific settings.
         return {}
     if method in PROPOSAL_TO_BASELINE:
+        alpha = data.get("mixup_alpha")
+        if method == "simcutmix":
+            # Existing SimCutMix summaries stored their alpha under
+            # mixup_alpha; new summaries use the method-specific field.
+            alpha = data.get("cutmix_alpha", alpha)
         return {
             "guided_mode": data.get("guided_mode"),
             "neighbor_k": data.get("neighbor_k"),
             "neighbor_rank_start": data.get("neighbor_rank_start", 1),
             "pair_sampling": data.get("pair_sampling"),
-            "alpha": data.get("mixup_alpha"),
+            "alpha": alpha,
             "mix_probability": data.get("mix_prob"),
             "warmup_epochs": data.get("mix_warmup_epochs"),
             "anchor_selection": data.get("anchor_selection"),

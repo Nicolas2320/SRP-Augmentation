@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 from src.train import (
     IMAGENET_MEAN,
     ExperimentConfig,
+    build_cutmix,
     build_lr_scheduler,
     build_optimizer,
     experiment_config_id,
@@ -29,6 +30,7 @@ def training_config(**overrides):
         "subset_seed": 0,
         "augmentation": "cutmix",
         "mixup_alpha": 1.0,
+        "cutmix_alpha": 1.0,
         "epochs": 100,
         "batch_size": 128,
         "lr": 0.1,
@@ -120,6 +122,14 @@ class TrainingRecipeTests(unittest.TestCase):
         self.assertEqual(optimizer.param_groups[0]["momentum"], 0.9)
         self.assertTrue(optimizer.param_groups[0]["nesterov"])
         self.assertEqual(optimizer.param_groups[0]["weight_decay"], 5e-4)
+
+    def test_cutmix_uses_recorded_alpha_and_probability(self):
+        config = training_config(cutmix_alpha=0.5, cutmix_prob=0.75, train_seed=7)
+
+        cutmix = build_cutmix(config)
+
+        self.assertEqual(cutmix.alpha, 0.5)
+        self.assertEqual(cutmix.probability, 0.75)
 
     def test_scheduler_scales_200_epoch_milestones_to_100_epochs(self):
         config = training_config()
