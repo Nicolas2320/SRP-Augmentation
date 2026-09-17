@@ -57,6 +57,7 @@ def write_run(
         # Deliberately stale: the loader should prefer the canonical sibling CSV.
         "metrics_path": "results/experiments/old/location/metrics.csv",
         "mixup_alpha": 1.0,
+        "cutmix_alpha": 1.0,
         "cutmix_prob": 0.5,
     }
     if augmentation == "simcutmix":
@@ -115,7 +116,7 @@ class PlotGraphDataTests(unittest.TestCase):
 
             self.assertTrue(runs["metrics_exists"].all())
             self.assertEqual(len(comparisons), 2)
-            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "No augmentation"})
+            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "Crop+Flip only"})
             cutmix = comparisons[comparisons["baseline_label"] == "CutMix"].iloc[0]
             self.assertAlmostEqual(cutmix["delta_test_pp"], 3.0)
             self.assertEqual(cutmix["proposal_label"], "SimCutMix")

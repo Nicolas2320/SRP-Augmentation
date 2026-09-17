@@ -38,7 +38,10 @@ DEFAULT_EXPERIMENTS_DIR = Path("results/experiments")
 # Use --output-dir for local, throwaway figure generation instead.
 DEFAULT_FIGURES_DIR = Path("docs/figures")
 
-METHOD_ORDER = ["none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
+METHOD_ORDER = ["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
+# "raw" (no crop/flip) is a separate ablation floor, not a mixing baseline, so
+# it is intentionally excluded here: proposal methods are only compared
+# against baselines that share their crop+flip pipeline.
 BASELINE_AUGMENTATIONS = ("none", "mixup", "cutmix", "augmix")
 PROPOSAL_TO_BASELINE = {
     "simmixup": "mixup",
@@ -46,7 +49,8 @@ PROPOSAL_TO_BASELINE = {
 }
 
 DISPLAY_NAMES = {
-    "none": "No augmentation",
+    "raw": "No augmentation",
+    "none": "Crop+Flip only",
     "mixup": "MixUp",
     "cutmix": "CutMix",
     "augmix": "AugMix",
@@ -55,6 +59,7 @@ DISPLAY_NAMES = {
 }
 
 COLORS = {
+    "raw": "#9AA0A6",
     "none": "#5F6368",
     "mixup": "#4C78A8",
     "cutmix": "#F58518",
@@ -64,6 +69,7 @@ COLORS = {
 }
 
 MARKERS = {
+    "raw": "x",
     "none": "o",
     "mixup": "s",
     "cutmix": "^",
@@ -172,25 +178,32 @@ def recipe_key(data: dict[str, Any]) -> str:
 def augmentation_configuration(data: dict[str, Any]) -> dict[str, Any]:
     """Return only parameters that identify a plotted augmentation series."""
     method = str(data["augmentation"])
-    if method == "none":
+    if method in {"raw", "none"}:
         return {}
     if method == "mixup":
         return {"alpha": data.get("mixup_alpha")}
     if method == "cutmix":
         return {
-            "alpha": data.get("mixup_alpha"),
+            # Older summaries predate the explicit field; baseline CutMix was
+            # hardcoded to alpha=1.0 in those runs.
+            "alpha": data.get("cutmix_alpha", 1.0),
             "probability": data.get("cutmix_prob"),
         }
     if method == "augmix":
         # Current summaries do not expose AugMix-specific settings.
         return {}
     if method in PROPOSAL_TO_BASELINE:
+        alpha = data.get("mixup_alpha")
+        if method == "simcutmix":
+            # Existing SimCutMix summaries stored their alpha under
+            # mixup_alpha; new summaries use the method-specific field.
+            alpha = data.get("cutmix_alpha", alpha)
         return {
             "guided_mode": data.get("guided_mode"),
             "neighbor_k": data.get("neighbor_k"),
             "neighbor_rank_start": data.get("neighbor_rank_start", 1),
             "pair_sampling": data.get("pair_sampling"),
-            "alpha": data.get("mixup_alpha"),
+            "alpha": alpha,
             "mix_probability": data.get("mix_prob"),
             "warmup_epochs": data.get("mix_warmup_epochs"),
             "anchor_selection": data.get("anchor_selection"),

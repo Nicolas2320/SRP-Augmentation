@@ -13,7 +13,8 @@ For setup and first commands, start with the
 The repository has two related experiment paths:
 
 1. **Standard augmentation** trains directly from a committed k-shot split
-   using none, MixUp, CutMix, or AugMix.
+   using raw (no augmentation), none (crop+flip only), MixUp, CutMix, or
+   AugMix.
 2. **Similarity-guided augmentation** first computes embeddings and neighbor
    sets, then uses those neighbors to choose the second sample for SimMixUp or
    SimCutMix. Anchor scoring is an optional additional selection step.
@@ -53,7 +54,7 @@ flowchart LR
 | `src/augmentations/` | Standard and similarity-guided augmentation implementations. |
 | `src/data/make_splits.py` | Deterministic validation and k-shot split generation. |
 | `src/data/indexed_dataset.py` | Dataset wrappers that preserve original CIFAR indices and sample guided pairs. |
-| `src/models/` | CIFAR-adapted ResNet50 and ViT builders. |
+| `src/models/` | ImageNet-pretrained ResNet50 (fine-tuned at 224x224) and CIFAR-adapted ViT builders. |
 | `src/proposal/compute_embeddings.py` | Computes ImageNet-encoder embeddings for the selected training subset. |
 | `src/proposal/build_neighbors.py` | Builds exact filtered neighbor sets from saved embeddings. |
 | `src/proposal/inspect_neighbors.py` | Validates embedding and neighbor payloads. |
@@ -107,9 +108,22 @@ The selected neighbor window is defined by `--neighbor-rank-start` and
 8. Reload that checkpoint and evaluate it once on the test set.
 9. Write `metrics.csv` and `summary.json`.
 
-All training modes start with CIFAR random crop and horizontal flip.
-Consequently, `--augmentation none` means no additional mixing method; it does
-not mean that spatial augmentation is disabled.
+All training modes except `raw` start with CIFAR random crop and horizontal
+flip. Consequently, `--augmentation none` means no additional mixing method;
+it does not mean that spatial augmentation is disabled. The four comparison
+tiers, weakest to strongest, are:
+
+| Tier | `--augmentation` | Crop+flip? | Mixing? |
+|---|---|---|---|
+| 1. True no-augmentation baseline | `raw` | No | No |
+| 2. Standard geometric augmentation | `none` | Yes | No |
+| 3. Classical mixing methods | `mixup`, `cutmix`, `augmix` | Yes | Yes |
+| 4. Proposed similarity-guided methods | `simmixup`, `simcutmix` | Yes | Yes (guided) |
+
+Tiers 2-4 all share the same crop+flip pipeline, so comparisons between them
+isolate the effect of the mixing strategy alone. Only `raw` omits crop+flip,
+and it exists solely to show the effect of standard geometric augmentation
+itself, not to be compared directly against the mixing methods.
 
 ## Experiment Artifacts
 

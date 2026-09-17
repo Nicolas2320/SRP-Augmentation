@@ -102,12 +102,19 @@ Use all material hyperparameters explicitly in commands intended for a report.
 For example:
 
 ```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --mixup-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
+python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
 
-Although `--mixup-alpha` is included in some shared command templates, it does
-not affect baseline CutMix; `--cutmix-prob` is the relevant CutMix-specific
-parameter.
+As of 2026-09-15, `--model resnet50` builds an ImageNet-pretrained ResNet50
+fine-tuned at 224x224 (see `src/models/resnet.py`), not the earlier
+from-scratch CIFAR-adapted model. The `--lr`, `--batch-size`, and runtime
+expectations above were tuned for the retired from-scratch recipe; see the
+caution note in the README's "Run a Standard Experiment" section before
+reproducing a ResNet50 run with these exact values.
+
+`--mixup-alpha` controls MixUp and SimMixUp. `--cutmix-alpha` controls CutMix
+and SimCutMix, while `--cutmix-prob` controls how often baseline CutMix is
+applied.
 
 The run writes:
 
@@ -141,7 +148,7 @@ result.
 ### 3. Train with the saved neighbor payload
 
 ```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation simcutmix --mixup-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k20_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
+python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation simcutmix --cutmix-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k20_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
 ```
 
 The neighbor file contains more neighbors than a run necessarily uses. The
