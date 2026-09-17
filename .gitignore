@@ -1,4 +1,5 @@
 data/raw/
+results/tuning/
 .venv/
 *.tar.gz
 *.zip

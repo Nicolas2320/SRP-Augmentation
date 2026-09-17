@@ -17,7 +17,8 @@ Current v1 support
 - subset seed loading: seed0, seed1, seed2 if split files exist
 - fixed validation split
 - best validation checkpoint saving
-- final test evaluation using the best validation checkpoint
+- optional final test evaluation using the best validation checkpoint
+- clean, no-mixing train evaluation for a comparable overfitting gap
 - metrics CSV and summary JSON outputs
 
 Example
@@ -118,6 +119,7 @@ class ExperimentConfig:
     lr_milestones: tuple[int, ...] = (30, 60, 80)
     lr_gamma: float = 0.2
     cutmix_prob: float = 0.5
+    cutmix_alpha: float = 1.0
 
 
 # -----------------------------------------------------------------------------
@@ -649,6 +651,7 @@ def train_one_epoch(
     augmentation: str = "none",
     cutmix=None,
     mixup_alpha: float = 1.0,
+    cutmix_alpha: float = 1.0,
     mix_prob: float = 1.0,
     augmentation_rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
@@ -681,7 +684,7 @@ def train_one_epoch(
                 targets_i=targets_i,
                 images_j=images_j,
                 targets_j=targets_j,
-                alpha=mixup_alpha,
+                alpha=cutmix_alpha,
                 mix_prob=mix_prob,
                 sample_mix_prob=anchor_mix_prob,
                 rng=augmentation_rng,
@@ -882,7 +885,12 @@ def experiment_name(config: ExperimentConfig) -> str:
     if config.augmentation not in {"simmixup", "simcutmix"}:
         return f"{base_name}_epochs{config.epochs}"
 
-    alpha = format_float_for_filename(config.mixup_alpha)
+    mixing_alpha = (
+        config.cutmix_alpha
+        if config.augmentation == "simcutmix"
+        else config.mixup_alpha
+    )
+    alpha = format_float_for_filename(mixing_alpha)
     mix_prob = format_float_for_filename(config.mix_prob)
     rank_start = int(config.neighbor_rank_start)
     rank_end = rank_start + int(config.neighbor_k) - 1
@@ -1080,7 +1088,59 @@ def build_lr_scheduler(
     )
 
 
-def run_experiment(config: ExperimentConfig) -> None:
+def build_cutmix(config: ExperimentConfig) -> CutMix:
+    """Build baseline CutMix from the recorded scientific configuration."""
+    return CutMix(
+        alpha=config.cutmix_alpha,
+        probability=config.cutmix_prob,
+        seed=config.train_seed,
+    )
+
+
+def build_clean_train_loader(
+    config: ExperimentConfig,
+    device: torch.device,
+) -> DataLoader:
+    """Build a deterministic, no-mixing loader over the labeled train subset."""
+    train_split_path, _ = get_split_paths(
+        dataset=config.dataset,
+        k=config.k,
+        subset_seed=config.subset_seed,
+        split_root=config.split_root,
+    )
+    train_indices = load_json(train_split_path)["train_indices"]
+    _, eval_transform = get_transforms(
+        dataset=config.dataset,
+        augmentation=config.augmentation,
+        seed=config.train_seed,
+        model=config.model,
+    )
+    DatasetClass = get_dataset_class(config.dataset)
+    clean_train_full = DatasetClass(
+        root=config.data_root,
+        train=True,
+        download=True,  # False on cluster
+        transform=eval_transform,
+    )
+    clean_train_dataset = Subset(clean_train_full, train_indices)
+    generator = torch.Generator()
+    generator.manual_seed(config.train_seed + 3)
+    return DataLoader(
+        clean_train_dataset,
+        batch_size=config.batch_size,
+        shuffle=False,
+        num_workers=config.num_workers,
+        pin_memory=device.type == "cuda",
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
+
+
+def run_experiment(
+    config: ExperimentConfig,
+    evaluate_test: bool = True,
+    evaluate_only: bool = False,
+) -> None:
     """Run one training experiment."""
     set_seed(config.train_seed)
     device = get_device()
@@ -1110,6 +1170,62 @@ def run_experiment(config: ExperimentConfig) -> None:
     num_classes = get_num_classes(config.dataset)
     model = build_model(config.model, num_classes=num_classes).to(device)
     criterion = nn.CrossEntropyLoss()
+
+    if evaluate_only:
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Missing checkpoint for evaluation: {checkpoint_path}")
+        if not summary_path.exists():
+            raise FileNotFoundError(f"Missing summary for evaluation: {summary_path}")
+
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        clean_train_loader = build_clean_train_loader(config=config, device=device)
+        clean_train_loss, clean_train_acc = evaluate(
+            model=model,
+            dataloader=clean_train_loader,
+            criterion=criterion,
+            device=device,
+        )
+        val_loss, val_acc = evaluate(
+            model=model,
+            dataloader=val_loader,
+            criterion=criterion,
+            device=device,
+        )
+        test_loss, test_acc = evaluate(
+            model=model,
+            dataloader=test_loader,
+            criterion=criterion,
+            device=device,
+        )
+
+        summary = load_json(summary_path)
+        if summary.get("config_id") != experiment_config_id(config):
+            raise ValueError(
+                "The saved summary does not match the requested scientific configuration."
+            )
+        summary.update(
+            {
+                "clean_train_loss_best_checkpoint": clean_train_loss,
+                "clean_train_acc_best_checkpoint": clean_train_acc,
+                "clean_gap_train_val": clean_train_acc - val_acc,
+                "validation_loss_best_checkpoint": val_loss,
+                "validation_acc_recomputed": val_acc,
+                "test_evaluated": True,
+                "test_loss_best_checkpoint": test_loss,
+                "test_acc_best_checkpoint": test_acc,
+            }
+        )
+        save_json(summary_path, summary)
+
+        print("\nEvaluated existing best-validation checkpoint:")
+        print(f"  clean_train_acc: {clean_train_acc:.4f}")
+        print(f"  validation_acc: {val_acc:.4f}")
+        print(f"  clean_train_val_gap: {clean_train_acc - val_acc:.4f}")
+        print(f"  test_acc: {test_acc:.4f}")
+        print(f"  updated_summary: {summary_path}")
+        return
+
     optimizer = build_optimizer(config=config, model=model)
     scheduler = build_lr_scheduler(config=config, optimizer=optimizer)
     augmentation_rng = np.random.default_rng(config.train_seed)
@@ -1117,11 +1233,7 @@ def run_experiment(config: ExperimentConfig) -> None:
     cutmix = None
 
     if config.augmentation == "cutmix":
-        cutmix = CutMix(
-            alpha=1.0,
-            probability=config.cutmix_prob,
-            seed=config.train_seed,
-        )
+        cutmix = build_cutmix(config)
 
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1157,6 +1269,7 @@ def run_experiment(config: ExperimentConfig) -> None:
             augmentation=config.augmentation,
             cutmix=cutmix,
             mixup_alpha=config.mixup_alpha,
+            cutmix_alpha=config.cutmix_alpha,
             mix_prob=effective_mix_prob,
             augmentation_rng=augmentation_rng,
         )
@@ -1209,12 +1322,23 @@ def run_experiment(config: ExperimentConfig) -> None:
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint["model_state_dict"])
 
-    test_loss, test_acc = evaluate(
+    clean_train_loader = build_clean_train_loader(config=config, device=device)
+    clean_train_loss, clean_train_acc = evaluate(
         model=model,
-        dataloader=test_loader,
+        dataloader=clean_train_loader,
         criterion=criterion,
         device=device,
     )
+
+    test_loss: float | None = None
+    test_acc: float | None = None
+    if evaluate_test:
+        test_loss, test_acc = evaluate(
+            model=model,
+            dataloader=test_loader,
+            criterion=criterion,
+            device=device,
+        )
 
     summary = {
         **asdict(config),
@@ -1224,6 +1348,10 @@ def run_experiment(config: ExperimentConfig) -> None:
         "num_test": num_test,
         "best_epoch": best_epoch,
         "best_val_acc": best_val_acc,
+        "clean_train_loss_best_checkpoint": clean_train_loss,
+        "clean_train_acc_best_checkpoint": clean_train_acc,
+        "clean_gap_train_val": clean_train_acc - best_val_acc,
+        "test_evaluated": evaluate_test,
         "test_loss_best_checkpoint": test_loss,
         "test_acc_best_checkpoint": test_acc,
         "metrics_path": str(metrics_path),
@@ -1235,8 +1363,15 @@ def run_experiment(config: ExperimentConfig) -> None:
     print("\nFinal result using best validation checkpoint:")
     print(f"  best_epoch: {best_epoch}")
     print(f"  best_val_acc: {best_val_acc:.4f}")
-    print(f"  test_loss: {test_loss:.4f}")
-    print(f"  test_acc: {test_acc:.4f}")
+    print(f"  clean_train_loss: {clean_train_loss:.4f}")
+    print(f"  clean_train_acc: {clean_train_acc:.4f}")
+    print(f"  clean_train_val_gap: {clean_train_acc - best_val_acc:.4f}")
+    if evaluate_test:
+        assert test_loss is not None and test_acc is not None
+        print(f"  test_loss: {test_loss:.4f}")
+        print(f"  test_acc: {test_acc:.4f}")
+    else:
+        print("  test: skipped for validation-only tuning")
     print("\nSaved outputs:")
     print(f"  metrics: {metrics_path}")
     print(f"  summary: {summary_path}")
@@ -1244,7 +1379,7 @@ def run_experiment(config: ExperimentConfig) -> None:
 
 
 
-def parse_args() -> ExperimentConfig:
+def parse_args() -> tuple[ExperimentConfig, bool, bool]:
     parser = argparse.ArgumentParser(description="Unified CIFAR SRP training script")
 
     parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
@@ -1302,6 +1437,29 @@ def parse_args() -> ExperimentConfig:
         default=0.5,
         help="Probability of applying baseline CutMix to a batch.",
     )
+    parser.add_argument(
+        "--cutmix-alpha",
+        type=float,
+        default=1.0,
+        help="Beta-distribution alpha for CutMix and SimCutMix.",
+    )
+    evaluation_mode = parser.add_mutually_exclusive_group()
+    evaluation_mode.add_argument(
+        "--skip-test",
+        action="store_true",
+        help=(
+            "Do not evaluate the test set after training. Use this for validation-only "
+            "hyperparameter searches to avoid test-set selection bias."
+        ),
+    )
+    evaluation_mode.add_argument(
+        "--evaluate-only",
+        action="store_true",
+        help=(
+            "Load the existing best checkpoint for this exact configuration, "
+            "evaluate clean train/validation/test, and update its summary without retraining."
+        ),
+    )
     parser.add_argument("--train-seed", type=int, default=0)
     parser.add_argument("--data-root", type=str, default="data/raw")
     parser.add_argument("--split-root", type=str, default="data/splits")
@@ -1311,11 +1469,13 @@ def parse_args() -> ExperimentConfig:
         default="results/experiments",
         help="Base folder for canonical experiment outputs.",
     )
-    parser.add_argument( # this is just for mixup
+    parser.add_argument(
         "--mixup-alpha",
         type=float,
         default=0.1,
-        help="MixUp alpha parameter. Default: 0.1 for weaker mixing.",
+        help=(
+            "Beta-distribution alpha for MixUp and SimMixUp."
+        ),
     )
     parser.add_argument(
         "--num-workers",
@@ -1449,7 +1609,7 @@ def parse_args() -> ExperimentConfig:
     if not 0.0 <= args.cutmix_prob <= 1.0:
         parser.error("--cutmix-prob must be between 0 and 1")
 
-    return ExperimentConfig(
+    config = ExperimentConfig(
         dataset=args.dataset,
         model=args.model,
         k=args.k,
@@ -1487,9 +1647,15 @@ def parse_args() -> ExperimentConfig:
         lr_milestones=tuple(args.lr_milestones),
         lr_gamma=args.lr_gamma,
         cutmix_prob=args.cutmix_prob,
+        cutmix_alpha=args.cutmix_alpha,
     )
+    return config, not args.skip_test, args.evaluate_only
 
 
 if __name__ == "__main__":
-    experiment_config = parse_args()
-    run_experiment(experiment_config)
+    experiment_config, evaluate_test, evaluate_only = parse_args()
+    run_experiment(
+        experiment_config,
+        evaluate_test=evaluate_test,
+        evaluate_only=evaluate_only,
+    )

@@ -57,6 +57,7 @@ def write_run(
         # Deliberately stale: the loader should prefer the canonical sibling CSV.
         "metrics_path": "results/experiments/old/location/metrics.csv",
         "mixup_alpha": 1.0,
+        "cutmix_alpha": 1.0,
         "cutmix_prob": 0.5,
     }
     if augmentation == "simcutmix":
