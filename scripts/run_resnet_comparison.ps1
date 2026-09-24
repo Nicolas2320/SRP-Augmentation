@@ -9,19 +9,26 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 $pythonPath = Join-Path (Get-Location) '.venv/Scripts/python.exe'
 $epochCount = 100
-$milestones = @('30', '60', '80')
-if ($K -eq 450) { $epochCount = 50; $milestones = @('15', '30', '40') }
+$milestones = @('30', '55', '75')
+$learningRate = '0.01'
+$lrGamma = '0.1'
+if ($K -eq 450) {
+    $epochCount = 50
+    $milestones = @('15', '30', '40')
+    $learningRate = '0.1'
+    $lrGamma = '0.2'
+}
 $initFlag = '--pretrained'
 if ($Initialization -eq 'scratch') { $initFlag = '--no-pretrained' }
 $trainArgs = @(
     '-u', 'src/train.py', '--dataset', 'cifar100', '--model', 'resnet50',
     $initFlag, '--k', "$K", '--subset-seed', '0', '--train-seed', '0',
-    '--augmentation', $Method, '--epochs', "$epochCount", '--batch-size', '32',
-    '--optimizer', 'sgd', '--lr', '0.01', '--momentum', '0.9', '--nesterov',
+    '--augmentation', $Method, '--epochs', "$epochCount", '--batch-size', '64',
+    '--optimizer', 'sgd', '--lr', $learningRate, '--momentum', '0.9', '--nesterov',
     '--weight-decay', '0.0005', '--lr-milestones'
 ) + $milestones + @(
-    '--lr-gamma', '0.2', '--mixup-alpha', '1', '--cutmix-alpha', '1',
-    '--cutmix-prob', '1', '--mix-prob', '1', '--mix-warmup-epochs', '0',
+    '--lr-gamma', $lrGamma, '--mixup-alpha', '1', '--cutmix-alpha', '1',
+    '--cutmix-prob', '0.5', '--mix-prob', '1', '--mix-warmup-epochs', '0',
     '--num-workers', '2',
     '--output-root', "results/comparison_v1/$Initialization"
 )

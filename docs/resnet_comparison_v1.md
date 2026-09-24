@@ -6,8 +6,11 @@ Use `--pretrained` / `--no-pretrained` in Python, or `-Initialization pretrained
 and its value participates in the configuration ID. Historical summaries
 without this field have unknown initialization for automatic matching.
 
-All runs use CIFAR-100, subset seed 0, train seed 0, batch 32, SGD, LR 0.01, momentum 0.9, Nesterov, weight decay 0.0005, gamma 0.2.
-k=20/50/100: 100 epochs, milestones 30/60/80. k=450: 50 epochs, milestones 15/30/40.
+All runs use CIFAR-100, subset seed 0, train seed 0, batch 64, SGD, momentum 0.9, Nesterov, weight decay 0.0005.
+k=20/50/100: 100 epochs, LR 0.01, milestones 30/55/75, gamma 0.1.
+k=450: 50 epochs, LR 0.1, milestones 15/30/40, gamma 0.2.
+These schedules follow the majority of historical scratch runs in GitHub main (ae782b5).
+AugMix follows the common per-k schedule here, rather than the historical AugMix exception (100 epochs, LR 0.1, milestones 30/60/80, gamma 0.2 at every k).
 Same ResNet-50 architecture, 224x224 input and ImageNet normalization in both regimes; only initialization differs. All parameters are trainable.
 
 | Display label | CLI method |
@@ -20,10 +23,10 @@ Same ResNet-50 architecture, 224x224 input and ImageNet normalization in both re
 | SimMixUp original | simmixup |
 | SimCutMix original | simcutmix |
 
-All methods except raw include crop+flip. Mixing alpha=1, mixing probability=1, no warmup. Guided methods use fixed ImageNet-encoder neighbors, class_agnostic, ranks 21–40, uniform sampling, 100% guidance, random patch location. Thus 'scratch' refers to the classifier initialization; guidance still uses an external pretrained encoder.
+All methods except raw include crop+flip. Mixing alpha=1, no warmup. Baseline CutMix probability=0.5, as in historical main; MixUp and the guided methods mix with probability=1. Therefore CutMix versus SimCutMix changes mixing frequency as well as partner selection, and is not a pairing-only ablation. Guided methods use fixed ImageNet-encoder neighbors, class_agnostic, ranks 21–40, uniform sampling, 100% guidance, random patch location. Thus 'scratch' refers to the classifier initialization; guidance still uses an external pretrained encoder.
 AugMix uses the existing implementation: severity=3, width=3, random depth, alpha=1, ordinary cross entropy, no JSD loss.
 
-Outputs: results/comparison_v1/scratch or results/comparison_v1/pretrained. Old experiments are retained as historical evidence, excluded from this fixed-protocol cohort. Reusing old runs requires matching the full recipe; the inspected historical runs do not match this recipe.
+Outputs: results/comparison_v1/scratch or results/comparison_v1/pretrained. Imported old experiments are historical evidence, excluded from this fixed-protocol cohort. Their optimizer schedules now match for the majority of methods, but historical main used a CIFAR-adapted 3x3/stride-1 stem, no initial maxpool, 32x32 inputs and CIFAR normalization. Current scratch and pretrained both use the standard 224x224 ResNet-50 pipeline. Old runs therefore remain a different architecture/preprocessing cohort.
 Best checkpoint selected by validation accuracy; test evaluated once at the end. Report clean train-validation gap, validation last-10 mean and variation, and test accuracy separately. One seed is exploratory; epoch variation is not seed standard deviation. This tests a common fixed recipe, not each regime's optimal hyperparameters.
 
 ## Execution
