@@ -82,6 +82,7 @@ MARKERS = {
 # comparison with a baseline. Augmentation-specific parameters are deliberately
 # excluded: they define the methods being compared.
 MATCHED_RECIPE_FIELDS = [
+    "pretrained",
     "dataset",
     "model",
     "k",
@@ -216,6 +217,7 @@ def augmentation_configuration(data: dict[str, Any]) -> dict[str, Any]:
 
 def series_key(data: dict[str, Any]) -> str:
     config = augmentation_configuration(data)
+    config["pretrained"] = data.get("pretrained", "unknown")
     return f"{data['augmentation']}|{json.dumps(config, sort_keys=True, separators=(',', ':'))}"
 
 
@@ -223,6 +225,8 @@ def series_label(data: dict[str, Any]) -> str:
     """Build a readable label that prevents guided variants being averaged."""
     method = str(data["augmentation"])
     base = DISPLAY_NAMES.get(method, method)
+    if "pretrained" in data and data.get("model") == "resnet50":
+        base += " [ImageNet]" if data["pretrained"] else " [scratch]"
     if method not in PROPOSAL_TO_BASELINE:
         return base
 

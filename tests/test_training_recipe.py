@@ -1,5 +1,6 @@
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import torch
@@ -8,11 +9,14 @@ import torch.nn as nn
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 
 from src.train import (
     IMAGENET_MEAN,
     ExperimentConfig,
     build_cutmix,
+    build_model,
+    parse_args,
     build_lr_scheduler,
     build_optimizer,
     experiment_config_id,
@@ -57,6 +61,22 @@ def training_config(**overrides):
 
 
 class TrainingRecipeTests(unittest.TestCase):
+    def test_initialization_default_and_explicit_cli(self):
+        for flags, expected in (([], False), (["--pretrained"], True), (["--no-pretrained"], False)):
+            with self.subTest(flags=flags), patch.object(sys, "argv", ["train.py"] + flags):
+                config, _, _ = parse_args()
+                self.assertEqual(config.pretrained, expected)
+        self.assertNotEqual(experiment_config_id(training_config(pretrained=False)),
+                            experiment_config_id(training_config(pretrained=True)))
+
+    def test_initialization_reaches_resnet_builder(self):
+        with patch("src.train.build_resnet50_cifar") as builder:
+            build_model("resnet50")
+            builder.assert_called_once_with(num_classes=100, pretrained=False)
+            builder.reset_mock()
+            build_model("resnet50", pretrained=True)
+            builder.assert_called_once_with(num_classes=100, pretrained=True)
+
     def test_every_training_pipeline_starts_with_crop_and_flip(self):
         for augmentation in (
             "none",

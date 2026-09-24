@@ -2,7 +2,7 @@
 
 SRP-Augmentation is a research codebase for comparing image augmentation
 methods in low-data image classification. It supports controlled CIFAR-10 and
-CIFAR-100 experiments with reproducible k-shot subsets, an ImageNet-pretrained
+CIFAR-100 experiments with reproducible k-shot subsets, an optionally ImageNet-pretrained
 ResNet50 (fine-tuned at 224x224) and a CIFAR-adapted ViT, standard augmentation
 baselines, and similarity-guided mixing.
 
@@ -196,9 +196,11 @@ ResNet50 CutMix experiment:
 python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
 ```
 
-**ResNet50 is ImageNet-pretrained and fine-tuned at 224x224** (see
-`src/models/resnet.py`); the CLI defaults above were tuned for training from
-scratch at 32x32 and were not re-tuned for fine-tuning a pretrained model.
+**ResNet50 starts from scratch by default.** Use `--pretrained` for ImageNet
+initialization or `--no-pretrained` explicitly for scratch. Both use the same
+224x224 architecture and preprocessing (see `src/models/resnet.py`).
+The fixed comparison recipe and individual commands are in
+[the comparison protocol](docs/resnet_comparison_v1.md).
 Before a full run, consider:
 
 - Lowering `--lr` (e.g. `0.01`): `0.1` is a large step for fine-tuning

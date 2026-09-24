@@ -120,6 +120,7 @@ class ExperimentConfig:
     lr_gamma: float = 0.2
     cutmix_prob: float = 0.5
     cutmix_alpha: float = 1.0
+    pretrained: bool = False
 
 
 # -----------------------------------------------------------------------------
@@ -227,10 +228,10 @@ def get_device() -> torch.device:
 
 # ResNet builder is implemented in `src/models/resnet.py` and imported above.
 
-def build_model(model_name: str, num_classes: int = 100) -> nn.Module:
+def build_model(model_name: str, num_classes: int = 100, pretrained: bool = False) -> nn.Module:
     """Build selected model."""
     if model_name == "resnet50":
-        return build_resnet50_cifar(num_classes=num_classes)
+        return build_resnet50_cifar(num_classes=num_classes, pretrained=pretrained)
 
     if model_name == "vit":
         return build_vit_cifar(num_classes=num_classes)
@@ -296,9 +297,9 @@ def get_transforms(
 ) -> tuple[transforms.Compose, transforms.Compose]:
     """Return train and evaluation transforms.
 
-    ResNet50 is an ImageNet-pretrained model (see build_resnet50_cifar), so
-    its pipeline is resized to 224x224 and normalized with ImageNet
-    statistics to match what the pretrained weights expect. All spatial
+    ResNet50 uses the same 224x224 pipeline and ImageNet normalization for
+    both random and ImageNet initialization, so the comparison changes
+    initialization without changing preprocessing. All spatial
     augmentation (crop/flip/AugMix) still runs on the native 32x32 image
     first; the resize is appended last since it commutes with normalization.
 
@@ -1168,7 +1169,9 @@ def run_experiment(
     ) = build_dataloaders(config=config, device=device)
 
     num_classes = get_num_classes(config.dataset)
-    model = build_model(config.model, num_classes=num_classes).to(device)
+    model = build_model(
+        config.model, num_classes=num_classes, pretrained=config.pretrained
+    ).to(device)
     criterion = nn.CrossEntropyLoss()
 
     if evaluate_only:
@@ -1384,6 +1387,10 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
 
     parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
     parser.add_argument("--model", type=str, default="resnet50", choices=["resnet50", "vit"])
+    parser.add_argument(
+        "--pretrained", action=argparse.BooleanOptionalAction, default=False,
+        help="Initialize ResNet50 from ImageNet. Default: random initialization (--no-pretrained).",
+    )
     parser.add_argument(
         "--k",
         type=int,
@@ -1648,6 +1655,7 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
         lr_gamma=args.lr_gamma,
         cutmix_prob=args.cutmix_prob,
         cutmix_alpha=args.cutmix_alpha,
+        pretrained=args.pretrained,
     )
     return config, not args.skip_test, args.evaluate_only
 

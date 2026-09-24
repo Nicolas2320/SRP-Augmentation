@@ -2,9 +2,9 @@ import torch.nn as nn
 from torchvision.models import ResNet50_Weights, resnet50
 
 
-def build_resnet50_cifar(num_classes: int = 100) -> nn.Module:
+def build_resnet50_cifar(num_classes: int = 100, pretrained: bool = False) -> nn.Module:
     """
-    Build an ImageNet-pretrained ResNet50 fine-tuned for CIFAR-style datasets.
+    Build ResNet50 from scratch by default, or initialize from ImageNet explicitly.
 
     The architecture is left unmodified (original 7x7 stride-2 stem and
     maxpool) so the pretrained weights stay valid. Inputs must be resized to
@@ -17,7 +17,7 @@ def build_resnet50_cifar(num_classes: int = 100) -> nn.Module:
     - CIFAR-100 with num_classes=100
     """
 
-    model = resnet50(weights=ResNet50_Weights.DEFAULT)
+    model = resnet50(weights=ResNet50_Weights.DEFAULT if pretrained else None)
     model.fc = nn.Linear(model.fc.in_features, num_classes)
 
     return model
