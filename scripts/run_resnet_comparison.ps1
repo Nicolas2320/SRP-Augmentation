@@ -23,7 +23,7 @@ if ($Initialization -eq 'scratch') { $initFlag = '--no-pretrained' }
 $trainArgs = @(
     '-u', 'src/train.py', '--dataset', 'cifar100', '--model', 'resnet50',
     $initFlag, '--k', "$K", '--subset-seed', '0', '--train-seed', '0',
-    '--augmentation', $Method, '--epochs', "$epochCount", '--batch-size', '64',
+    '--augmentation', $Method, '--epochs', "$epochCount", '--batch-size', '32',
     '--optimizer', 'sgd', '--lr', $learningRate, '--momentum', '0.9', '--nesterov',
     '--weight-decay', '0.0005', '--lr-milestones'
 ) + $milestones + @(
