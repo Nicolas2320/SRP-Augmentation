@@ -32,7 +32,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 
-DEFAULT_EXPERIMENTS_DIR = Path("results/experiments")
+DEFAULT_EXPERIMENTS_DIR = Path("results/comparison_v1")
 # These figures are intentionally versioned so GitHub presents the current
 # research evidence without requiring a reviewer to run the plotting script.
 # Use --output-dir for local, throwaway figure generation instead.
@@ -173,6 +173,7 @@ def recipe_key(data: dict[str, Any]) -> str:
         field: normalized_value(data.get(field, "__missing__"))
         for field in MATCHED_RECIPE_FIELDS
     }
+    recipe["cohort"] = data.get("provenance", {}).get("collection", "current")
     return json.dumps(recipe, sort_keys=True, separators=(",", ":"))
 
 
@@ -218,6 +219,14 @@ def augmentation_configuration(data: dict[str, Any]) -> dict[str, Any]:
 def series_key(data: dict[str, Any]) -> str:
     config = augmentation_configuration(data)
     config["pretrained"] = data.get("pretrained", "unknown")
+    # Do not average different budgets/recipes as if they were repeated seeds.
+    config["training_recipe"] = {
+        field: data.get(field, "__missing__")
+        for field in MATCHED_RECIPE_FIELDS
+        if field not in {"dataset", "model", "k", "subset_seed", "train_seed",
+                         "num_train", "num_val", "num_test", "pretrained"}
+    }
+    config["cohort"] = data.get("provenance", {}).get("collection", "current")
     return f"{data['augmentation']}|{json.dumps(config, sort_keys=True, separators=(',', ':'))}"
 
 
@@ -342,6 +351,11 @@ def load_summary_metrics(experiments_dir: Path) -> pd.DataFrame:
                 "metrics_exists": metrics_path.exists(),
                 "dataset": str(data["dataset"]),
                 "model": str(data["model"]),
+                "initialization": (
+                    "pretrained" if data.get("pretrained") is True else
+                    "scratch" if data.get("pretrained") is False else "unknown"
+                ),
+                "cohort": data.get("provenance", {}).get("collection", "current"),
                 "k": int(data["k"]),
                 "subset_seed": int(data["subset_seed"]),
                 "train_seed": int(data.get("train_seed", 0)),
@@ -353,8 +367,8 @@ def load_summary_metrics(experiments_dir: Path) -> pd.DataFrame:
                 "epochs": int(data["epochs"]),
                 "best_epoch": int(data["best_epoch"]),
                 "best_val_acc": float(data["best_val_acc"]),
-                "test_acc": float(data["test_acc_best_checkpoint"]),
-                "test_loss": float(data.get("test_loss_best_checkpoint", np.nan)),
+                "test_acc": float(data["test_acc_best_checkpoint"]) if data["test_acc_best_checkpoint"] is not None else np.nan,
+                "test_loss": float(data["test_loss_best_checkpoint"]) if data.get("test_loss_best_checkpoint") is not None else np.nan,
             }
         )
 
@@ -691,7 +705,7 @@ def plot_matched_test_accuracy(
     )
 
     legend_items: list[Line2D] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     for row in grouped.itertuples(index=False):
         for role, method, series_key, label in (
             (
@@ -707,12 +721,9 @@ def plot_matched_test_accuracy(
                 row.proposal_series_label,
             ),
         ):
-            key = (method, series_key)
-            if key in seen:
+            if method in seen:
                 continue
-            seen.add(key)
-            if role == "baseline" and baseline_series_counts[method] > 1:
-                label = configured_series_label(label, method, series_key)
+            seen.add(method)
             legend_items.append(
                 Line2D(
                     [0],
@@ -722,7 +733,7 @@ def plot_matched_test_accuracy(
                     markerfacecolor=COLORS[method],
                     markeredgecolor="white",
                     markersize=8,
-                    label=label,
+                    label=DISPLAY_NAMES.get(method, label),
                 )
             )
     fig.legend(
@@ -1312,7 +1323,7 @@ def plot_matched_overfitting_gap(
         ax.set_ylim(panel_min - pad, panel_max + pad)
         ax.grid()
         ax.set_axisbelow(True)
-        ax.legend(loc="upper left", fontsize=8.0)
+        ax.legend(loc="upper left", fontsize=8.0, ncol=2)
 
     for ax in axes_flat[n_panels:]:
         ax.axis("off")
@@ -1350,6 +1361,38 @@ def panel_series_label(panel: pd.DataFrame, row: pd.Series) -> str:
             row["series_key"],
         )
     return row["method_name"]
+
+
+def combine_method_variants(panel: pd.DataFrame, augmentation: str) -> pd.DataFrame:
+    """Treat recipe variants as one displayed method at each data budget."""
+    method_rows: list[dict[str, Any]] = []
+    subset = panel[panel["augmentation"] == augmentation]
+    for k, variants in subset.groupby("k", sort=True):
+        weights = variants["runs"].astype(float).to_numpy()
+        means = variants["mean_test_acc"].astype(float).to_numpy()
+        total_runs = int(weights.sum())
+        combined_mean = float(np.average(means, weights=weights))
+
+        combined_std = np.nan
+        if total_runs > 1:
+            within_variance = 0.0
+            for variant, weight in zip(variants.itertuples(index=False), weights):
+                if weight > 1 and pd.notna(variant.std_test_acc):
+                    within_variance += (weight - 1.0) * float(variant.std_test_acc) ** 2
+            between_variance = float(np.sum(weights * (means - combined_mean) ** 2))
+            combined_std = math.sqrt(
+                (within_variance + between_variance) / (total_runs - 1)
+            )
+
+        method_rows.append(
+            {
+                "k": k,
+                "mean_test_acc": combined_mean,
+                "std_test_acc": combined_std,
+                "runs": total_runs,
+            }
+        )
+    return pd.DataFrame(method_rows)
 
 
 def spread_label_positions(
@@ -1419,14 +1462,14 @@ def plot_available_test_accuracy(
         x_lookup = {k: index for index, k in enumerate(k_values)}
 
         series_order = (
-            panel[["augmentation", "series_key", "series_label"]]
+            panel[["augmentation", "method_name"]]
             .drop_duplicates()
             .assign(
                 sort_key=lambda frame: frame["augmentation"].map(
                     lambda value: method_sort_key(value)[0]
                 )
             )
-            .sort_values(["sort_key", "series_key"])
+            .sort_values(["sort_key", "augmentation"])
         )
         x = np.arange(len(k_values), dtype=float)
         n_series = len(series_order)
@@ -1434,12 +1477,8 @@ def plot_available_test_accuracy(
         offsets = (np.arange(n_series) - (n_series - 1) / 2) * width
 
         for offset, series in zip(offsets, series_order.itertuples(index=False)):
-            subset = panel[
-                (panel["augmentation"] == series.augmentation)
-                & (panel["series_key"] == series.series_key)
-            ].sort_values("k")
-            row0 = subset.iloc[0]
-            label = panel_series_label(panel, row0)
+            subset = combine_method_variants(panel, series.augmentation)
+            label = series.method_name
             by_k = subset.set_index("k")
             values = np.asarray(
                 [
@@ -1653,18 +1692,15 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=None,
-        help="Figure output directory (default: docs/figures).",
+        help="Output root; initialization subfolders are created automatically.",
     )
+    parser.add_argument("--initialization", choices=["all", "scratch", "pretrained", "unknown"], default="all")
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    experiments_dir = args.experiments_dir
-    output_dir = args.output_dir or DEFAULT_FIGURES_DIR
-
-    configure_plot_style()
-    runs = load_summary_metrics(experiments_dir)
+def generate_figures(runs: pd.DataFrame, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    runs.to_csv(output_dir / "runs.csv", index=False)
     aggregated = aggregate_runs(runs)
     comparisons = build_all_baseline_comparisons(runs)
     epoch_metrics = load_epoch_metrics(runs)
@@ -1691,6 +1727,25 @@ def main() -> None:
             "No direct proposal-baseline figure was generated because no proposal "
             "run had a baseline with the same recorded training recipe."
         )
+
+
+def figure_groups(runs: pd.DataFrame, output_dir: Path, initialization: str = "all"):
+    """Use one output directory per explicit initialization, overwritten on rerun."""
+    for init, subset in runs.groupby("initialization", sort=True):
+        if initialization != "all" and init != initialization:
+            continue
+        yield subset, output_dir / init
+
+
+def main() -> None:
+    args = parse_args()
+    configure_plot_style()
+    runs = load_summary_metrics(args.experiments_dir)
+    groups = list(figure_groups(runs, args.output_dir or DEFAULT_FIGURES_DIR, args.initialization))
+    if not groups:
+        print(f"No runs found for initialization={args.initialization}; no figures generated.")
+    for group, output_dir in groups:
+        generate_figures(group, output_dir)
 
 
 if __name__ == "__main__":
