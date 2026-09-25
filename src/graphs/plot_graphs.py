@@ -32,7 +32,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 
-DEFAULT_EXPERIMENTS_DIR = Path("results/experiments")
+DEFAULT_EXPERIMENTS_DIR = Path("results/comparison_v1")
 # These figures are intentionally versioned so GitHub presents the current
 # research evidence without requiring a reviewer to run the plotting script.
 # Use --output-dir for local, throwaway figure generation instead.
@@ -173,6 +173,7 @@ def recipe_key(data: dict[str, Any]) -> str:
         field: normalized_value(data.get(field, "__missing__"))
         for field in MATCHED_RECIPE_FIELDS
     }
+    recipe["cohort"] = data.get("provenance", {}).get("collection", "current")
     return json.dumps(recipe, sort_keys=True, separators=(",", ":"))
 
 
@@ -218,6 +219,14 @@ def augmentation_configuration(data: dict[str, Any]) -> dict[str, Any]:
 def series_key(data: dict[str, Any]) -> str:
     config = augmentation_configuration(data)
     config["pretrained"] = data.get("pretrained", "unknown")
+    # Do not average different budgets/recipes as if they were repeated seeds.
+    config["training_recipe"] = {
+        field: data.get(field, "__missing__")
+        for field in MATCHED_RECIPE_FIELDS
+        if field not in {"dataset", "model", "k", "subset_seed", "train_seed",
+                         "num_train", "num_val", "num_test", "pretrained"}
+    }
+    config["cohort"] = data.get("provenance", {}).get("collection", "current")
     return f"{data['augmentation']}|{json.dumps(config, sort_keys=True, separators=(',', ':'))}"
 
 
@@ -342,6 +351,11 @@ def load_summary_metrics(experiments_dir: Path) -> pd.DataFrame:
                 "metrics_exists": metrics_path.exists(),
                 "dataset": str(data["dataset"]),
                 "model": str(data["model"]),
+                "initialization": (
+                    "pretrained" if data.get("pretrained") is True else
+                    "scratch" if data.get("pretrained") is False else "unknown"
+                ),
+                "cohort": data.get("provenance", {}).get("collection", "current"),
                 "k": int(data["k"]),
                 "subset_seed": int(data["subset_seed"]),
                 "train_seed": int(data.get("train_seed", 0)),
@@ -353,8 +367,8 @@ def load_summary_metrics(experiments_dir: Path) -> pd.DataFrame:
                 "epochs": int(data["epochs"]),
                 "best_epoch": int(data["best_epoch"]),
                 "best_val_acc": float(data["best_val_acc"]),
-                "test_acc": float(data["test_acc_best_checkpoint"]),
-                "test_loss": float(data.get("test_loss_best_checkpoint", np.nan)),
+                "test_acc": float(data["test_acc_best_checkpoint"]) if data["test_acc_best_checkpoint"] is not None else np.nan,
+                "test_loss": float(data["test_loss_best_checkpoint"]) if data.get("test_loss_best_checkpoint") is not None else np.nan,
             }
         )
 
@@ -1312,7 +1326,7 @@ def plot_matched_overfitting_gap(
         ax.set_ylim(panel_min - pad, panel_max + pad)
         ax.grid()
         ax.set_axisbelow(True)
-        ax.legend(loc="upper left", fontsize=8.0)
+        ax.legend(loc="upper left", fontsize=8.0, ncol=2)
 
     for ax in axes_flat[n_panels:]:
         ax.axis("off")
@@ -1653,18 +1667,15 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         default=None,
-        help="Figure output directory (default: docs/figures).",
+        help="Output root; initialization subfolders are created automatically.",
     )
+    parser.add_argument("--initialization", choices=["all", "scratch", "pretrained", "unknown"], default="all")
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
-    experiments_dir = args.experiments_dir
-    output_dir = args.output_dir or DEFAULT_FIGURES_DIR
-
-    configure_plot_style()
-    runs = load_summary_metrics(experiments_dir)
+def generate_figures(runs: pd.DataFrame, output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    runs.to_csv(output_dir / "runs.csv", index=False)
     aggregated = aggregate_runs(runs)
     comparisons = build_all_baseline_comparisons(runs)
     epoch_metrics = load_epoch_metrics(runs)
@@ -1691,6 +1702,30 @@ def main() -> None:
             "No direct proposal-baseline figure was generated because no proposal "
             "run had a baseline with the same recorded training recipe."
         )
+
+
+def figure_groups(runs: pd.DataFrame, output_dir: Path, initialization: str = "all"):
+    """Partition by explicit initialization and historical provenance, never path guesses."""
+    for init, subset in runs.groupby("initialization", sort=True):
+        if initialization != "all" and init != initialization:
+            continue
+        for cohort, group in subset.groupby("cohort", sort=True):
+            destination = output_dir / init
+            if cohort != "current":
+                # Fixed name: metadata must not supply filesystem paths.
+                destination /= "historical"
+            yield group, destination
+
+
+def main() -> None:
+    args = parse_args()
+    configure_plot_style()
+    runs = load_summary_metrics(args.experiments_dir)
+    groups = list(figure_groups(runs, args.output_dir or DEFAULT_FIGURES_DIR, args.initialization))
+    if not groups:
+        print(f"No runs found for initialization={args.initialization}; no figures generated.")
+    for group, output_dir in groups:
+        generate_figures(group, output_dir)
 
 
 if __name__ == "__main__":

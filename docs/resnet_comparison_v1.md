@@ -31,6 +31,23 @@ Best checkpoint selected by validation accuracy; test evaluated once at the end.
 
 ## Execution
 
+### Figures
+
+Use the same plotting program for both initializations:
+
+```powershell
+python src/graphs/plot_graphs.py --experiments-dir results/comparison_v1 --output-dir docs/figures
+```
+
+The default output root is `docs/figures`. Outputs are written under
+`docs/figures/scratch/` and `docs/figures/pretrained/`, each with
+the same figure types and a `runs.csv` listing the contributing summaries.
+Imported historical scratch runs go under `docs/figures/scratch/historical/` because
+they use a different architecture/preprocessing pipeline. Summaries without an
+explicit initialization go to `docs/figures/unknown/`. Empty groups produce no figures.
+Use `--initialization pretrained` or `--initialization scratch` to select a regime.
+Different training recipes are not averaged as repeated seeds.
+
 Run from the project root in PowerShell. Each line below runs ONE experiment. Omitting -Execute prints the underlying Python command without training. No training was launched while preparing this plan.
 
 56 total runs. Prioritize CutMix and SimCutMix at k=20/50/100 in both regimes; then remaining methods; k=450 last.

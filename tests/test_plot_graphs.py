@@ -15,6 +15,9 @@ from src.graphs.plot_graphs import (
     build_all_baseline_comparisons,
     load_summary_metrics,
     spread_label_positions,
+    figure_groups,
+    recipe_key,
+    series_key,
 )
 
 
@@ -82,6 +85,29 @@ def write_run(
 
 
 class PlotGraphDataTests(unittest.TestCase):
+    def test_initialization_and_historical_outputs_are_separate(self):
+        runs = pd.DataFrame([
+            {"initialization": "scratch", "cohort": "current", "run_id": "a"},
+            {"initialization": "scratch", "cohort": "historical_from_scratch", "run_id": "b"},
+            {"initialization": "pretrained", "cohort": "current", "run_id": "c"},
+            {"initialization": "unknown", "cohort": "current", "run_id": "d"},
+        ])
+        groups = {str(path.as_posix()): list(group.run_id) for group, path in figure_groups(runs, Path("plots"))}
+        self.assertEqual(groups, {"plots/scratch": ["a"], "plots/scratch/historical": ["b"],
+                                  "plots/pretrained": ["c"], "plots/unknown": ["d"]})
+        filtered = list(figure_groups(runs, Path("plots"), "pretrained"))
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(list(filtered[0][0].run_id), ["c"])
+
+    def test_recipes_and_historical_architectures_are_not_pooled(self):
+        base = {"augmentation": "cutmix", "pretrained": False, "epochs": 100, "batch_size": 64}
+        changed = {**base, "batch_size": 32}
+        historical = {**base, "provenance": {"collection": "historical_from_scratch"}}
+        self.assertNotEqual(series_key(base), series_key(changed))
+        self.assertNotEqual(series_key(base), series_key(historical))
+        self.assertNotEqual(recipe_key(base), recipe_key(historical))
+        self.assertEqual(series_key(base), series_key({**base, "train_seed": 1}))
+
     def test_loader_and_matching_use_recipe_not_augmentation_parameters(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             experiments_dir = Path(temp_dir) / "results" / "experiments"

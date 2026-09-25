@@ -9,6 +9,7 @@ results/tuning/
 
 !docs/figures/
 !docs/figures/*.png
+!docs/figures/**/*.png
 
 # macOS
 .DS_Store
