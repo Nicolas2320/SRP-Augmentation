@@ -42,8 +42,9 @@ python src/graphs/plot_graphs.py --experiments-dir results/comparison_v1 --outpu
 The default output root is `docs/figures`. Outputs are written under
 `docs/figures/scratch/` and `docs/figures/pretrained/`, each with
 the same figure types and a `runs.csv` listing the contributing summaries.
-Imported historical scratch runs go under `docs/figures/scratch/historical/` because
-they use a different architecture/preprocessing pipeline. Summaries without an
+Historical and current scratch runs share `docs/figures/scratch/`; rerunning
+the plotter replaces the generated figures and `runs.csv` in that directory.
+Training records are not overwritten. Summaries without an
 explicit initialization go to `docs/figures/unknown/`. Empty groups produce no figures.
 Use `--initialization pretrained` or `--initialization scratch` to select a regime.
 Different training recipes are not averaged as repeated seeds.

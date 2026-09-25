@@ -1705,16 +1705,11 @@ def generate_figures(runs: pd.DataFrame, output_dir: Path) -> None:
 
 
 def figure_groups(runs: pd.DataFrame, output_dir: Path, initialization: str = "all"):
-    """Partition by explicit initialization and historical provenance, never path guesses."""
+    """Use one output directory per explicit initialization, overwritten on rerun."""
     for init, subset in runs.groupby("initialization", sort=True):
         if initialization != "all" and init != initialization:
             continue
-        for cohort, group in subset.groupby("cohort", sort=True):
-            destination = output_dir / init
-            if cohort != "current":
-                # Fixed name: metadata must not supply filesystem paths.
-                destination /= "historical"
-            yield group, destination
+        yield subset, output_dir / init
 
 
 def main() -> None:

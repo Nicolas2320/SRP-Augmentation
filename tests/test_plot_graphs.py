@@ -85,7 +85,7 @@ def write_run(
 
 
 class PlotGraphDataTests(unittest.TestCase):
-    def test_initialization_and_historical_outputs_are_separate(self):
+    def test_one_output_directory_per_initialization(self):
         runs = pd.DataFrame([
             {"initialization": "scratch", "cohort": "current", "run_id": "a"},
             {"initialization": "scratch", "cohort": "historical_from_scratch", "run_id": "b"},
@@ -93,7 +93,7 @@ class PlotGraphDataTests(unittest.TestCase):
             {"initialization": "unknown", "cohort": "current", "run_id": "d"},
         ])
         groups = {str(path.as_posix()): list(group.run_id) for group, path in figure_groups(runs, Path("plots"))}
-        self.assertEqual(groups, {"plots/scratch": ["a"], "plots/scratch/historical": ["b"],
+        self.assertEqual(groups, {"plots/scratch": ["a", "b"],
                                   "plots/pretrained": ["c"], "plots/unknown": ["d"]})
         filtered = list(figure_groups(runs, Path("plots"), "pretrained"))
         self.assertEqual(len(filtered), 1)
