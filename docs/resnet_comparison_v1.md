@@ -31,6 +31,23 @@ Best checkpoint selected by validation accuracy; test evaluated once at the end.
 
 ## Execution
 
+### Imported AugMix evidence
+
+The eight historical AugMix runs (ResNet50 and ViT, k=20/50/100/450) are
+stored under `results/comparison_v1/scratch/cifar100/<model>/k<k>/augmix/`.
+Initialization was inferred from the model code at the commits introducing
+the results: `be0824b` for ResNet50 (`weights=None`, CIFAR-adapted stem), and
+`c41ba00` for ViT (randomly initialized VisionTransformer). Each summary
+records `pretrained=false`, the source commit and original paths in provenance.
+The CSV metrics and reported accuracies are unchanged. Checkpoints were not
+included in the imported Git files.
+
+These runs appear in the scratch accuracy-by-k and coverage figures, with a
+separate model panel for ViT. Their original 100-epoch LR 0.1 schedule with
+milestones 30/60/80 and gamma 0.2 is preserved. They are historical evidence,
+not new fixed-protocol runs; recipe-matched comparisons still require the
+same training recipe.
+
 ### Figures
 
 Use the same plotting program for both initializations:
