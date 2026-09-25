@@ -705,7 +705,7 @@ def plot_matched_test_accuracy(
     )
 
     legend_items: list[Line2D] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[str] = set()
     for row in grouped.itertuples(index=False):
         for role, method, series_key, label in (
             (
@@ -721,12 +721,9 @@ def plot_matched_test_accuracy(
                 row.proposal_series_label,
             ),
         ):
-            key = (method, series_key)
-            if key in seen:
+            if method in seen:
                 continue
-            seen.add(key)
-            if role == "baseline" and baseline_series_counts[method] > 1:
-                label = configured_series_label(label, method, series_key)
+            seen.add(method)
             legend_items.append(
                 Line2D(
                     [0],
@@ -736,7 +733,7 @@ def plot_matched_test_accuracy(
                     markerfacecolor=COLORS[method],
                     markeredgecolor="white",
                     markersize=8,
-                    label=label,
+                    label=DISPLAY_NAMES.get(method, label),
                 )
             )
     fig.legend(
@@ -1366,6 +1363,38 @@ def panel_series_label(panel: pd.DataFrame, row: pd.Series) -> str:
     return row["method_name"]
 
 
+def combine_method_variants(panel: pd.DataFrame, augmentation: str) -> pd.DataFrame:
+    """Treat recipe variants as one displayed method at each data budget."""
+    method_rows: list[dict[str, Any]] = []
+    subset = panel[panel["augmentation"] == augmentation]
+    for k, variants in subset.groupby("k", sort=True):
+        weights = variants["runs"].astype(float).to_numpy()
+        means = variants["mean_test_acc"].astype(float).to_numpy()
+        total_runs = int(weights.sum())
+        combined_mean = float(np.average(means, weights=weights))
+
+        combined_std = np.nan
+        if total_runs > 1:
+            within_variance = 0.0
+            for variant, weight in zip(variants.itertuples(index=False), weights):
+                if weight > 1 and pd.notna(variant.std_test_acc):
+                    within_variance += (weight - 1.0) * float(variant.std_test_acc) ** 2
+            between_variance = float(np.sum(weights * (means - combined_mean) ** 2))
+            combined_std = math.sqrt(
+                (within_variance + between_variance) / (total_runs - 1)
+            )
+
+        method_rows.append(
+            {
+                "k": k,
+                "mean_test_acc": combined_mean,
+                "std_test_acc": combined_std,
+                "runs": total_runs,
+            }
+        )
+    return pd.DataFrame(method_rows)
+
+
 def spread_label_positions(
     values: list[float],
     minimum_gap: float,
@@ -1433,14 +1462,14 @@ def plot_available_test_accuracy(
         x_lookup = {k: index for index, k in enumerate(k_values)}
 
         series_order = (
-            panel[["augmentation", "series_key", "series_label"]]
+            panel[["augmentation", "method_name"]]
             .drop_duplicates()
             .assign(
                 sort_key=lambda frame: frame["augmentation"].map(
                     lambda value: method_sort_key(value)[0]
                 )
             )
-            .sort_values(["sort_key", "series_key"])
+            .sort_values(["sort_key", "augmentation"])
         )
         x = np.arange(len(k_values), dtype=float)
         n_series = len(series_order)
@@ -1448,12 +1477,8 @@ def plot_available_test_accuracy(
         offsets = (np.arange(n_series) - (n_series - 1) / 2) * width
 
         for offset, series in zip(offsets, series_order.itertuples(index=False)):
-            subset = panel[
-                (panel["augmentation"] == series.augmentation)
-                & (panel["series_key"] == series.series_key)
-            ].sort_values("k")
-            row0 = subset.iloc[0]
-            label = panel_series_label(panel, row0)
+            subset = combine_method_variants(panel, series.augmentation)
+            label = series.method_name
             by_k = subset.set_index("k")
             values = np.asarray(
                 [

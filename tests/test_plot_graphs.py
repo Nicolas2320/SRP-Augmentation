@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from src.graphs.plot_graphs import (
     aggregate_runs,
     build_all_baseline_comparisons,
+    combine_method_variants,
     load_summary_metrics,
     spread_label_positions,
     figure_groups,
@@ -172,6 +173,40 @@ class PlotGraphDataTests(unittest.TestCase):
 
         self.assertEqual(aggregated.iloc[0]["runs"], 1)
         self.assertTrue(pd.isna(aggregated.iloc[0]["std_test_acc"]))
+
+    def test_plot_combines_recipe_variants_under_one_method(self):
+        panel = pd.DataFrame(
+            [
+                {
+                    "k": 100,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.40,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+                {
+                    "k": 100,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.44,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+                {
+                    "k": 450,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.69,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+            ]
+        )
+
+        combined = combine_method_variants(panel, "mixup")
+
+        self.assertEqual(list(combined["k"]), [100, 450])
+        self.assertAlmostEqual(combined.iloc[0]["mean_test_acc"], 0.42)
+        self.assertEqual(combined.iloc[0]["runs"], 2)
+        self.assertAlmostEqual(combined.iloc[1]["mean_test_acc"], 0.69)
 
     def test_label_spreading_preserves_order_and_minimum_gap(self):
         values = [71.1, 69.0, 72.7, 71.6]
