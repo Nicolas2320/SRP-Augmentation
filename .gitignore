@@ -1,4 +1,5 @@
 data/raw/
+results/tuning/
 .venv/
 *.tar.gz
 *.zip
@@ -8,6 +9,7 @@ data/raw/
 
 !docs/figures/
 !docs/figures/*.png
+!docs/figures/**/*.png
 
 # macOS
 .DS_Store

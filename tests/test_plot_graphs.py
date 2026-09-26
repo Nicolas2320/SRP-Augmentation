@@ -13,8 +13,12 @@ sys.path.insert(0, str(ROOT))
 from src.graphs.plot_graphs import (
     aggregate_runs,
     build_all_baseline_comparisons,
+    combine_method_variants,
     load_summary_metrics,
     spread_label_positions,
+    figure_groups,
+    recipe_key,
+    series_key,
 )
 
 
@@ -57,6 +61,7 @@ def write_run(
         # Deliberately stale: the loader should prefer the canonical sibling CSV.
         "metrics_path": "results/experiments/old/location/metrics.csv",
         "mixup_alpha": 1.0,
+        "cutmix_alpha": 1.0,
         "cutmix_prob": 0.5,
     }
     if augmentation == "simcutmix":
@@ -81,6 +86,29 @@ def write_run(
 
 
 class PlotGraphDataTests(unittest.TestCase):
+    def test_one_output_directory_per_initialization(self):
+        runs = pd.DataFrame([
+            {"initialization": "scratch", "cohort": "current", "run_id": "a"},
+            {"initialization": "scratch", "cohort": "historical_from_scratch", "run_id": "b"},
+            {"initialization": "pretrained", "cohort": "current", "run_id": "c"},
+            {"initialization": "unknown", "cohort": "current", "run_id": "d"},
+        ])
+        groups = {str(path.as_posix()): list(group.run_id) for group, path in figure_groups(runs, Path("plots"))}
+        self.assertEqual(groups, {"plots/scratch": ["a", "b"],
+                                  "plots/pretrained": ["c"], "plots/unknown": ["d"]})
+        filtered = list(figure_groups(runs, Path("plots"), "pretrained"))
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(list(filtered[0][0].run_id), ["c"])
+
+    def test_recipes_and_historical_architectures_are_not_pooled(self):
+        base = {"augmentation": "cutmix", "pretrained": False, "epochs": 100, "batch_size": 64}
+        changed = {**base, "batch_size": 32}
+        historical = {**base, "provenance": {"collection": "historical_from_scratch"}}
+        self.assertNotEqual(series_key(base), series_key(changed))
+        self.assertNotEqual(series_key(base), series_key(historical))
+        self.assertNotEqual(recipe_key(base), recipe_key(historical))
+        self.assertEqual(series_key(base), series_key({**base, "train_seed": 1}))
+
     def test_loader_and_matching_use_recipe_not_augmentation_parameters(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             experiments_dir = Path(temp_dir) / "results" / "experiments"
@@ -115,7 +143,7 @@ class PlotGraphDataTests(unittest.TestCase):
 
             self.assertTrue(runs["metrics_exists"].all())
             self.assertEqual(len(comparisons), 2)
-            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "No augmentation"})
+            self.assertEqual(set(comparisons["baseline_label"]), {"CutMix", "Crop+Flip only"})
             cutmix = comparisons[comparisons["baseline_label"] == "CutMix"].iloc[0]
             self.assertAlmostEqual(cutmix["delta_test_pp"], 3.0)
             self.assertEqual(cutmix["proposal_label"], "SimCutMix")
@@ -145,6 +173,40 @@ class PlotGraphDataTests(unittest.TestCase):
 
         self.assertEqual(aggregated.iloc[0]["runs"], 1)
         self.assertTrue(pd.isna(aggregated.iloc[0]["std_test_acc"]))
+
+    def test_plot_combines_recipe_variants_under_one_method(self):
+        panel = pd.DataFrame(
+            [
+                {
+                    "k": 100,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.40,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+                {
+                    "k": 100,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.44,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+                {
+                    "k": 450,
+                    "augmentation": "mixup",
+                    "mean_test_acc": 0.69,
+                    "std_test_acc": float("nan"),
+                    "runs": 1,
+                },
+            ]
+        )
+
+        combined = combine_method_variants(panel, "mixup")
+
+        self.assertEqual(list(combined["k"]), [100, 450])
+        self.assertAlmostEqual(combined.iloc[0]["mean_test_acc"], 0.42)
+        self.assertEqual(combined.iloc[0]["runs"], 2)
+        self.assertAlmostEqual(combined.iloc[1]["mean_test_acc"], 0.69)
 
     def test_label_spreading_preserves_order_and_minimum_gap(self):
         values = [71.1, 69.0, 72.7, 71.6]

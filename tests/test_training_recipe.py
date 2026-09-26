@@ -1,5 +1,6 @@
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import torch
@@ -8,9 +9,14 @@ import torch.nn as nn
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 
 from src.train import (
+    IMAGENET_MEAN,
     ExperimentConfig,
+    build_cutmix,
+    build_model,
+    parse_args,
     build_lr_scheduler,
     build_optimizer,
     experiment_config_id,
@@ -28,6 +34,7 @@ def training_config(**overrides):
         "subset_seed": 0,
         "augmentation": "cutmix",
         "mixup_alpha": 1.0,
+        "cutmix_alpha": 1.0,
         "epochs": 100,
         "batch_size": 128,
         "lr": 0.1,
@@ -54,6 +61,22 @@ def training_config(**overrides):
 
 
 class TrainingRecipeTests(unittest.TestCase):
+    def test_initialization_default_and_explicit_cli(self):
+        for flags, expected in (([], False), (["--pretrained"], True), (["--no-pretrained"], False)):
+            with self.subTest(flags=flags), patch.object(sys, "argv", ["train.py"] + flags):
+                config, _, _ = parse_args()
+                self.assertEqual(config.pretrained, expected)
+        self.assertNotEqual(experiment_config_id(training_config(pretrained=False)),
+                            experiment_config_id(training_config(pretrained=True)))
+
+    def test_initialization_reaches_resnet_builder(self):
+        with patch("src.train.build_resnet50_cifar") as builder:
+            build_model("resnet50")
+            builder.assert_called_once_with(num_classes=100, pretrained=False)
+            builder.reset_mock()
+            build_model("resnet50", pretrained=True)
+            builder.assert_called_once_with(num_classes=100, pretrained=True)
+
     def test_every_training_pipeline_starts_with_crop_and_flip(self):
         for augmentation in (
             "none",
@@ -68,11 +91,47 @@ class TrainingRecipeTests(unittest.TestCase):
                     "cifar100",
                     augmentation=augmentation,
                     seed=0,
+                    model="vit",
                 )
                 train_names = [type(step).__name__ for step in train_transform.transforms]
                 eval_names = [type(step).__name__ for step in eval_transform.transforms]
                 self.assertEqual(train_names[:2], ["RandomCrop", "RandomHorizontalFlip"])
                 self.assertEqual(eval_names, ["ToTensor", "Normalize"])
+
+    def test_resnet50_pipeline_resizes_to_224_with_imagenet_stats(self):
+        for augmentation in ("none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"):
+            with self.subTest(augmentation=augmentation):
+                train_transform, eval_transform = get_transforms(
+                    "cifar100",
+                    augmentation=augmentation,
+                    seed=0,
+                    model="resnet50",
+                )
+                train_names = [type(step).__name__ for step in train_transform.transforms]
+                eval_names = [type(step).__name__ for step in eval_transform.transforms]
+                self.assertEqual(train_names[:2], ["RandomCrop", "RandomHorizontalFlip"])
+                self.assertEqual(train_names[-1], "Resize")
+                self.assertEqual(eval_names, ["ToTensor", "Normalize", "Resize"])
+                self.assertEqual(eval_transform.transforms[-1].size, 224)
+                self.assertEqual(tuple(eval_transform.transforms[1].mean), IMAGENET_MEAN)
+
+    def test_raw_pipeline_has_no_crop_or_flip(self):
+        for model in ("vit", "resnet50"):
+            with self.subTest(model=model):
+                train_transform, eval_transform = get_transforms(
+                    "cifar100",
+                    augmentation="raw",
+                    seed=0,
+                    model=model,
+                )
+                train_names = [type(step).__name__ for step in train_transform.transforms]
+                self.assertNotIn("RandomCrop", train_names)
+                self.assertNotIn("RandomHorizontalFlip", train_names)
+                self.assertEqual(train_names[:2], ["ToTensor", "Normalize"])
+                self.assertEqual(
+                    [type(step).__name__ for step in train_transform.transforms],
+                    [type(step).__name__ for step in eval_transform.transforms],
+                )
 
     def test_optimizer_is_sgd_with_nesterov(self):
         config = training_config()
@@ -83,6 +142,14 @@ class TrainingRecipeTests(unittest.TestCase):
         self.assertEqual(optimizer.param_groups[0]["momentum"], 0.9)
         self.assertTrue(optimizer.param_groups[0]["nesterov"])
         self.assertEqual(optimizer.param_groups[0]["weight_decay"], 5e-4)
+
+    def test_cutmix_uses_recorded_alpha_and_probability(self):
+        config = training_config(cutmix_alpha=0.5, cutmix_prob=0.75, train_seed=7)
+
+        cutmix = build_cutmix(config)
+
+        self.assertEqual(cutmix.alpha, 0.5)
+        self.assertEqual(cutmix.probability, 0.75)
 
     def test_scheduler_scales_200_epoch_milestones_to_100_epochs(self):
         config = training_config()
