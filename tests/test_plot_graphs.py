@@ -17,6 +17,7 @@ from src.graphs.plot_graphs import (
     load_summary_metrics,
     spread_label_positions,
     figure_groups,
+    portable_runs_table,
     recipe_key,
     series_key,
 )
@@ -86,6 +87,33 @@ def write_run(
 
 
 class PlotGraphDataTests(unittest.TestCase):
+    def test_runs_csv_paths_are_repository_relative(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            summary_path = repo_root / "results" / "comparison_v1" / "summary.json"
+            metrics_path = summary_path.with_name("metrics.csv")
+            runs = pd.DataFrame(
+                [
+                    {
+                        "summary_path": str(summary_path),
+                        "metrics_path": str(metrics_path),
+                        "run_id": "example",
+                    }
+                ]
+            )
+
+            portable = portable_runs_table(runs, repo_root)
+
+            self.assertEqual(
+                portable.iloc[0]["summary_path"],
+                "results/comparison_v1/summary.json",
+            )
+            self.assertEqual(
+                portable.iloc[0]["metrics_path"],
+                "results/comparison_v1/metrics.csv",
+            )
+            self.assertEqual(portable.iloc[0]["run_id"], "example")
+
     def test_one_output_directory_per_initialization(self):
         runs = pd.DataFrame([
             {"initialization": "scratch", "cohort": "current", "run_id": "a"},

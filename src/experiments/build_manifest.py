@@ -1,7 +1,8 @@
 """Build a CSV index for saved experiment outputs.
 
-The manifest is non-destructive: it reads existing summary JSON and CSV files
-under ``results/`` and writes ``results/experiments/manifest.csv``.
+The command is non-destructive: it recursively reads summaries below
+``--results-root`` and writes ``manifest.csv`` below ``--output-dir``. Paths in
+the manifest are made repository-relative when possible.
 """
 
 from __future__ import annotations
@@ -218,9 +219,30 @@ def write_outputs(rows: list[dict[str, str]], output_dir: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build the central experiment manifest.")
-    parser.add_argument("--results-root", type=Path, default=Path("results"))
-    parser.add_argument("--output-dir", type=Path, default=Path("results/experiments"))
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build a non-destructive CSV index from experiment summary files. "
+            "The output is <output-dir>/manifest.csv."
+        )
+    )
+    parser.add_argument(
+        "--results-root",
+        type=Path,
+        default=Path("results"),
+        help=(
+            "Directory scanned recursively for summary.json and legacy "
+            "*_summary.json files (default: results)."
+        ),
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("results/experiments"),
+        help=(
+            "Directory that receives manifest.csv "
+            "(default: results/experiments)."
+        ),
+    )
     return parser.parse_args()
 
 
