@@ -2,6 +2,15 @@
 
 Last verified: 2026-07-26
 
+**2026-09-15 update:** ResNet50 switched from training from scratch to an
+ImageNet-pretrained ResNet50 fine-tuned at 224x224 (see
+[Project Status](../docs/project_status.md)). All ResNet50 numbers below were
+produced by the retired from-scratch recipe, are no longer comparable to new
+pretrained-ResNet50 runs, and have been archived to
+`../SRP-old_experiments/resnet50_from_scratch/`. They remain here only as a
+historical record until the pretrained recipe is re-run and this file is
+updated with new numbers.
+
 ## Scope
 
 The active manifest contains 20 complete CIFAR-100 experiments:

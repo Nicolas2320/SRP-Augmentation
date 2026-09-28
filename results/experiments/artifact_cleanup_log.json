@@ -205,6 +205,25 @@
           "sha256": "29ef4cbebb5844a500c96dcd92e8b62c86d665b25fd7d76d349c8fd0b39422d0"
         }
       ]
+    },
+    {
+      "date": "2026-09-15",
+      "action": "external_archive_move",
+      "reason": "Supervisor feedback: switch ResNet50 from training from scratch (weights=None, CIFAR-adapted 3x3/stride-1 stem, no maxpool) to an ImageNet-pretrained ResNet50 fine-tuned at 224x224 (see src/models/resnet.py). All from-scratch ResNet50 CIFAR-100 results are superseded and archived rather than deleted, since they are no longer comparable to the new pretrained recipe.",
+      "destination": "../SRP-old_experiments/resnet50_from_scratch/cifar100_resnet50",
+      "folder_count": 19,
+      "artifact_count": 57,
+      "total_size_bytes": 3610414938,
+      "summary_count": 19,
+      "metrics_count": 19,
+      "checkpoint_count": 19,
+      "recoverability": "The archive contains every locally available file from the moved run folders (summary.json, metrics.csv, checkpoint_best.pt) plus a snapshot of manifest.csv taken immediately before the move (manifest_before_archive_20260915.csv).",
+      "source_folders": [
+        "results/experiments/cifar100/resnet50/k20",
+        "results/experiments/cifar100/resnet50/k50",
+        "results/experiments/cifar100/resnet50/k100",
+        "results/experiments/cifar100/resnet50/k450"
+      ]
     }
   ]
 }
