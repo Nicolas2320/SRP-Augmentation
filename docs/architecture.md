@@ -1,191 +1,186 @@
 # Architecture
 
-This document explains how SRP-Augmentation fits together. It is intended for a
-new collaborator who wants to locate the right code before changing or running
-anything.
+This guide explains how data, support artifacts, training, and result records
+fit together. For commands and environment requirements, see
+[Reproducibility](reproducibility.md).
 
-For setup and first commands, start with the
-[project README](../README.md). For experiment reproducibility, see
-[reproducibility.md](reproducibility.md).
+## System Overview
 
-## Mental Model
+The repository supports two training paths:
 
-The repository has two related experiment paths:
+1. Standard methods load a committed k-shot split and apply `raw`, `none`,
+   MixUp, CutMix, or AugMix.
+2. Guided methods first compute frozen-encoder embeddings and nearest-neighbor
+   sets, then use those sets to choose partners for SimMixUp or SimCutMix.
 
-1. **Standard augmentation** trains directly from a committed k-shot split
-   using raw (no augmentation), none (crop+flip only), MixUp, CutMix, or
-   AugMix.
-2. **Similarity-guided augmentation** first computes embeddings and neighbor
-   sets, then uses those neighbors to choose the second sample for SimMixUp or
-   SimCutMix. Anchor scoring is an optional additional selection step.
-
-Both paths converge on the same training engine and produce the same core
-artifacts: epoch metrics, a run summary, and a best-validation checkpoint.
+Both paths use the same training engine and produce the same core records.
 
 ```mermaid
 flowchart LR
-    raw["CIFAR data<br/>data/raw/"] --> splits["Committed split JSON<br/>data/splits/"]
-    splits --> loader["Datasets and data loaders"]
-
-    splits --> embeddings["ImageNet encoder embeddings"]
-    embeddings --> neighbors["Filtered nearest neighbors"]
+    cifar["CIFAR data\ndata/raw/"] --> splits["Committed split JSON\ndata/splits/"]
+    splits --> loader["Indexed datasets and data loaders"]
+    splits --> embed["Frozen ImageNet encoder\nembeddings"]
+    embed --> neighbors["Exact filtered\nneighbor sets"]
     neighbors --> pairs["GuidedPairDataset"]
     loader --> pairs
-
-    loader --> standard["Standard augmentation<br/>None / MixUp / CutMix / AugMix"]
-    pairs --> guided["Guided augmentation<br/>SimMixUp / SimCutMix"]
-
-    checkpoint["Reference checkpoint"] --> scores["Optional anchor scores"]
-    embeddings --> scores
-    scores --> pairs
-
-    standard --> engine["Training and evaluation engine"]
-    guided --> engine
-    engine --> artifacts["metrics.csv<br/>summary.json<br/>checkpoint_best.pt"]
-    artifacts --> manifest["Experiment manifest"]
-    artifacts --> plots["Comparison plots"]
+    loader --> standard["Raw / crop+flip /\nMixUp / CutMix / AugMix"]
+    pairs --> guided["SimMixUp / SimCutMix"]
+    scores["Optional anchor scores"] --> pairs
+    standard --> train["Training, validation,\nbest-checkpoint selection"]
+    guided --> train
+    train --> records["metrics.csv + summary.json\n+ local checkpoint_best.pt"]
+    records --> plots["Initialization-specific figures\nand runs.csv"]
 ```
 
 ## Source Layout
 
 | Location | Responsibility |
 |---|---|
-| `src/train.py` | Unified CLI, configuration, data-loader construction, training, evaluation, and output writing. |
-| `src/augmentations/` | Standard and similarity-guided augmentation implementations. |
-| `src/data/make_splits.py` | Deterministic validation and k-shot split generation. |
-| `src/data/indexed_dataset.py` | Dataset wrappers that preserve original CIFAR indices and sample guided pairs. |
-| `src/models/` | ResNet50 at 224x224 (scratch by default; ImageNet via `--pretrained`) and CIFAR-adapted ViT builders. |
-| `src/proposal/compute_embeddings.py` | Computes ImageNet-encoder embeddings for the selected training subset. |
-| `src/proposal/build_neighbors.py` | Builds exact filtered neighbor sets from saved embeddings. |
-| `src/proposal/inspect_neighbors.py` | Validates embedding and neighbor payloads. |
-| `src/proposal/score_anchors.py` | Combines uncertainty and rarity into optional anchor-selection scores. |
-| `src/experiments/build_manifest.py` | Generates the sortable experiment catalog. |
-| `src/experiments/audit_artifacts.py` | Audits result pairs, recorded references, and local artifact retention candidates without deleting files. |
-| `src/graphs/plot_graphs.py` | Generates comparison figures from summaries and epoch metrics. |
-| `tests/` | Unit and small integration tests for splits, datasets, guided methods, and the training recipe. |
+| `src/train.py` | Unified CLI, validation, data loaders, training, evaluation, and record writing |
+| `src/augmentations/` | MixUp, CutMix, AugMix, SimMixUp, and SimCutMix implementations |
+| `src/data/make_splits.py` | Deterministic validation and k-shot split generation |
+| `src/data/indexed_dataset.py` | Original-index preservation and guided partner sampling |
+| `src/models/resnet.py` | Standard torchvision ResNet50 at 224x224, random or ImageNet initialization |
+| `src/models/vit.py` | Scratch-trained CIFAR ViT at 32x32 |
+| `src/proposal/compute_embeddings.py` | Frozen-encoder embedding generation |
+| `src/proposal/build_neighbors.py` | Exact, blockwise, filtered neighbor search |
+| `src/proposal/inspect_neighbors.py` | Neighbor-payload validation and diagnostics |
+| `src/proposal/score_anchors.py` | Optional uncertainty/rarity anchor scores |
+| `src/experiments/build_manifest.py` | Generic CSV manifest builder |
+| `src/experiments/audit_artifacts.py` | Read-only audit of records and local `.pt` references |
+| `src/graphs/plot_graphs.py` | Recipe-aware comparison plots and per-group `runs.csv` files |
+| `scripts/run_resnet_comparison.ps1` | Fixed ResNet50 comparison command builder/runner |
+| `tests/` | Unit and small integration tests; no full dataset training |
 
-`src/proposal/` contains the implementation of the proposed
-similarity-guided method. The name refers to the research proposal, not to a
-temporary prototype.
+`src/proposal/` is the implementation area for the proposed method; it is not
+an abandoned prototype.
 
-## Data and Index Flow
+## Stable Index Flow
 
-Original CIFAR training-set indices are the stable identifiers that connect
-splits, embeddings, neighbors, and anchor scores.
+Original CIFAR training-set indices join every stage:
 
-1. `make_splits.py` reserves a fixed validation set and saves the remaining
-   k-shot training indices.
+1. `make_splits.py` reserves a fixed validation set and saves training indices.
 2. `compute_embeddings.py` embeds only the selected training indices and saves
-   their original indices alongside the tensors.
-3. `build_neighbors.py` searches within that saved subset and stores neighbor
-   indices and similarity values.
-4. `GuidedPairDataset` maps each anchor back to its saved neighbor row and
-   returns an anchor/partner pair.
-5. `train.py` applies SimMixUp or SimCutMix to the paired batch.
+   those original indices with the embeddings.
+3. `build_neighbors.py` searches within that subset and stores neighbor indices
+   and similarity scores.
+4. `GuidedPairDataset` maps each training anchor to its saved neighbor row.
+5. `train.py` applies SimMixUp or SimCutMix to the returned pair.
 
-Neighbor modes have different pairing constraints:
+Neighbor modes:
 
-| Mode | Partner constraint |
+| Mode | Eligible partner |
 |---|---|
-| `class_aware` | Partner has the same class as the anchor. |
-| `class_agnostic` | Partner may have the same or a different class. |
-| `different_label` | Partner must have a different class. |
+| `class_aware` | Same class as the anchor |
+| `class_agnostic` | Any class |
+| `different_label` | A different class |
 
-The selected neighbor window is defined by `--neighbor-rank-start` and
-`--neighbor-k`. For example, start `21` and count `20` samples ranks 21–40.
+`--neighbor-rank-start` is one-indexed and `--neighbor-k` is the number of
+ranks used. For example, start 21 with count 20 selects ranks 21-40 from the
+saved set.
 
-## Training Flow
+## Preprocessing and Models
 
-`src/train.py` follows this lifecycle:
+Preprocessing depends on the classifier:
 
-1. Parse an `ExperimentConfig`.
-2. Seed Python, NumPy, PyTorch, transforms, workers, and data-loader shuffling.
-3. Load the committed k-shot and validation indices.
-4. Build CIFAR datasets, transforms, and data loaders.
-5. Build the requested model, optimizer, and learning-rate scheduler.
-6. Train and validate for each epoch.
-7. Replace `checkpoint_best.pt` whenever validation accuracy improves.
-8. Reload that checkpoint and evaluate it once on the test set.
-9. Write `metrics.csv` and `summary.json`.
+- Current ResNet50 uses the unmodified torchvision architecture, 224x224
+  inputs, and ImageNet normalization. It starts randomly unless `--pretrained`
+  is passed.
+- ViT uses 32x32 CIFAR inputs, 4x4 patches, six transformer blocks, 256 hidden
+  dimensions, and eight attention heads. It is trained from scratch.
 
-All training modes except `raw` start with CIFAR random crop and horizontal
-flip. Consequently, `--augmentation none` means no additional mixing method;
-it does not mean that spatial augmentation is disabled. The four comparison
-tiers, weakest to strongest, are:
+Some imported scratch-group ResNet50 records were produced by an earlier
+CIFAR-adapted 32x32 architecture. Their summaries carry
+`cohort=historical_from_scratch`; plotting code keeps incompatible
+architecture/recipe cohorts from being treated as repeated runs.
 
-| Tier | `--augmentation` | Crop+flip? | Mixing? |
-|---|---|---|---|
-| 1. True no-augmentation baseline | `raw` | No | No |
-| 2. Standard geometric augmentation | `none` | Yes | No |
-| 3. Classical mixing methods | `mixup`, `cutmix`, `augmix` | Yes | Yes |
-| 4. Proposed similarity-guided methods | `simmixup`, `simcutmix` | Yes | Yes (guided) |
+## Augmentation Semantics
 
-Tiers 2-4 all share the same crop+flip pipeline, so comparisons between them
-isolate the effect of the mixing strategy alone. Only `raw` omits crop+flip,
-and it exists solely to show the effect of standard geometric augmentation
-itself, not to be compared directly against the mixing methods.
+| CLI value | Spatial crop/flip | Additional operation |
+|---|---:|---|
+| `raw` | No | None |
+| `none` | Yes | None |
+| `mixup` | Yes | Random MixUp |
+| `cutmix` | Yes | Random CutMix |
+| `augmix` | Yes | AugMix transform chain; no JSD consistency loss |
+| `simmixup` | Yes | MixUp with a saved guided partner |
+| `simcutmix` | Yes | CutMix with a saved guided partner |
 
-## Experiment Artifacts
+Comparisons among `none` and the four mixing methods share crop+flip.
+`raw` answers a different question: what happens without even those spatial
+augmentations.
 
-The current training entry point writes runs below:
+## Training Lifecycle
+
+For a normal training run, `src/train.py`:
+
+1. Parses and validates an `ExperimentConfig`.
+2. Seeds Python, NumPy, PyTorch, data-loader generators, workers, and
+   transforms.
+3. Loads committed split indices and builds datasets/loaders.
+4. Builds the classifier, optimizer, and multi-step LR scheduler.
+5. Trains and validates each epoch.
+6. Replaces `checkpoint_best.pt` whenever validation accuracy improves.
+7. Reloads that checkpoint and evaluates the test set unless `--skip-test` was
+   requested.
+8. Writes `metrics.csv` and `summary.json`.
+
+`--skip-test` supports validation-only configuration selection.
+`--evaluate-only` loads the checkpoint for the exact computed configuration,
+evaluates clean train/validation/test splits, and updates its summary without
+retraining.
+
+## Result Layout
+
+The generic default output root is `results/experiments`, but the active fixed
+comparison overrides it with `results/comparison_v1/<initialization>`.
 
 ```text
-results/experiments/
-  <dataset>/<model>/k<k>/
-    <method>/
-      [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
-        e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
-          metrics.csv
-          summary.json
-          checkpoint_best.pt
+<output-root>/<dataset>/<model>/k<k>/<method>/
+  [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
+  e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
+    metrics.csv
+    summary.json
+    checkpoint_best.pt
 ```
 
-The short config ID is derived from the complete scientific configuration and
-prevents accidental overwrites. The full configuration remains authoritative
-in `summary.json`.
+The eight-character config ID is derived from the scientific configuration
+while excluding machine-specific paths and worker count. It prevents distinct
+recipes from overwriting one another. `summary.json` remains authoritative.
 
-Earlier runs without the current learning-rate schedule used the shorter
-layout:
+| Artifact | Role | Tracked? |
+|---|---|---:|
+| `metrics.csv` | Per-epoch LR, loss, train accuracy, and validation accuracy | Yes |
+| `summary.json` | Configuration, best epoch, test result, and artifact paths | Yes |
+| `checkpoint_best.pt` | Best-validation model/optimizer state | Usually local |
+| `docs/figures/<initialization>/runs.csv` | Generated list of summaries used by plots | Yes |
+| Embedding/neighbor `.pt` files | Support data for guided runs | Local/generated |
 
-```text
-results/experiments/<dataset>/<model>/k<k>/<method>/.../
-```
+## Plotting and Comparison Boundaries
 
-Those historical runs are stored in the external sibling archive
-`../SRP-old_experiments/historical_no_lr_schedule/` and are not part of the
-active manifest. The layouts describe when a run was created; they are not two
-different training engines.
+`plot_graphs.py` discovers summaries below `results/comparison_v1`, separates
+scratch/pretrained/unknown initialization, and writes one figure directory per
+group. Direct comparisons require a matched dataset, model, k, subset seed,
+training seed, epoch budget, optimizer, LR recipe, preprocessing cohort, and
+initialization. Method-specific augmentation parameters remain visible but do
+not define the shared training recipe.
 
-Artifact responsibilities are:
-
-| Artifact | Meaning |
-|---|---|
-| `metrics.csv` | Per-epoch learning rate, loss, and accuracy. |
-| `summary.json` | Run configuration, best validation epoch, and final test result. |
-| `checkpoint_best.pt` | Model and optimizer state at the best validation epoch. |
-| `manifest.csv` | Generated, spreadsheet-friendly index of run summaries. |
-| `shared/neighbors/` | Reusable embeddings, neighbor payloads, and their metadata. |
-| `shared/anchor_scores/` | Optional anchor-selection score files; created on demand. |
-| `docs/figures/` | Versioned comparison plots displayed in the README. |
-
-CSV and JSON research records are committed when they are part of the project
-evidence. Curated comparison figures in `docs/figures/` are also committed so
-GitHub displays the current evidence; large `.pt` payloads and other generated
-PNG files remain local.
+This prevents incompatible historical architectures or schedules from being
+averaged as if they were repeated seeds. Single runs are displayed without
+uncertainty bars.
 
 ## Safe Extension Points
 
-Common additions normally belong in these locations:
+- New augmentation: implement under `src/augmentations/`, connect it in
+  `src/train.py`, and add focused tests.
+- New model: add a builder under `src/models/`, connect preprocessing and CLI
+  validation, and test the data shape.
+- New neighbor mode: extend `build_neighbors.py`, payload validation, and
+  `GuidedPairDataset` tests together.
+- New summary field: update `train.py` and any manifest/plot reader that should
+  expose it.
+- New plot: add it to `src/graphs/plot_graphs.py` and preserve recipe-aware
+  grouping.
 
-- A new standard augmentation: `src/augmentations/`, then connect it in
-  `src/train.py`.
-- A new model: `src/models/`, then connect its builder in `src/train.py`.
-- A new neighbor-filtering strategy: `src/proposal/build_neighbors.py` and the
-  guided dataset validation.
-- A new experiment summary field: `src/train.py` and, when it should be
-  sortable, `src/experiments/build_manifest.py`.
-- A new result visualization: `src/graphs/plot_graphs.py`.
-
-Behavioral changes should include or update a test under `tests/` and should
-preserve the existing output records unless an intentional migration is being
-performed.
+Do not rewrite existing result records merely to fit a new schema. Add
+backward-compatible readers or perform an explicit, documented migration.

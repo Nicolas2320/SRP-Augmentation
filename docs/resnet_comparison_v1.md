@@ -1,137 +1,168 @@
-# ResNet-50 comparison v1 — proposed fixed protocol
+# ResNet50 Comparison v1
 
-ResNet-50 defaults to scratch in the CLI, model builder and execution script.
-Use `--pretrained` / `--no-pretrained` in Python, or `-Initialization pretrained`
-/ `-Initialization scratch` in PowerShell. The summary records `pretrained`
-and its value participates in the configuration ID. Historical summaries
-without this field have unknown initialization for automatic matching.
+Last verified: 2026-09-28.
 
-All runs use CIFAR-100, subset seed 0, train seed 0, batch 64, SGD, momentum 0.9, Nesterov, weight decay 0.0005.
-k=20/50/100: 100 epochs, LR 0.01, milestones 30/55/75, gamma 0.1.
-k=450: 50 epochs, LR 0.1, milestones 15/30/40, gamma 0.2.
-These schedules follow the majority of historical scratch runs in GitHub main (ae782b5).
-AugMix follows the common per-k schedule here, rather than the historical AugMix exception (100 epochs, LR 0.1, milestones 30/60/80, gamma 0.2 at every k).
-Same ResNet-50 architecture, 224x224 input and ImageNet normalization in both regimes; only initialization differs. All parameters are trainable.
+This document defines the fixed command recipe implemented by
+`scripts/run_resnet_comparison.ps1` and records where existing evidence
+deviates from it. It is a common-recipe comparison, not a claim that the
+hyperparameters are optimal for every method or initialization.
 
-| Display label | CLI method |
-|---|---|
-| No augmentation (deterministic resize/normalize only) | raw |
-| Crop + Flip | none |
-| MixUp | mixup |
-| CutMix | cutmix |
-| AugMix (without JSD consistency loss) | augmix |
-| SimMixUp original | simmixup |
-| SimCutMix original | simcutmix |
+## Scientific Scope
 
-All methods except raw include crop+flip. Mixing alpha=1, no warmup. Baseline CutMix probability=0.5, as in historical main; MixUp and the guided methods mix with probability=1. Therefore CutMix versus SimCutMix changes mixing frequency as well as partner selection, and is not a pairing-only ablation. Guided methods use fixed ImageNet-encoder neighbors, class_agnostic, ranks 21–40, uniform sampling, 100% guidance, random patch location. Thus 'scratch' refers to the classifier initialization; guidance still uses an external pretrained encoder.
-AugMix uses the existing implementation: severity=3, width=3, random depth, alpha=1, ordinary cross entropy, no JSD loss.
+- Dataset: CIFAR-100.
+- Classifier: standard torchvision ResNet50.
+- Input: 224x224 with ImageNet normalization.
+- Initializations: random (`scratch`) and ImageNet (`pretrained`).
+- All classifier parameters are trainable.
+- Subset seed: 0.
+- Training seed: 0.
+- Data budgets: k=20/50/100/450.
+- Selection: best validation accuracy.
+- Test: evaluated once from the selected checkpoint.
 
-Outputs: results/comparison_v1/scratch or results/comparison_v1/pretrained. Imported old experiments are historical evidence, excluded from this fixed-protocol cohort. Their optimizer schedules now match for the majority of methods, but historical main used a CIFAR-adapted 3x3/stride-1 stem, no initial maxpool, 32x32 inputs and CIFAR normalization. Current scratch and pretrained both use the standard 224x224 ResNet-50 pipeline. Old runs therefore remain a different architecture/preprocessing cohort.
-Best checkpoint selected by validation accuracy; test evaluated once at the end. Report clean train-validation gap, validation last-10 mean and variation, and test accuracy separately. One seed is exploratory; epoch variation is not seed standard deviation. This tests a common fixed recipe, not each regime's optimal hyperparameters.
+For guided methods, `scratch` describes classifier initialization only. The
+partner-selection encoder is still a frozen ImageNet-pretrained ResNet50.
+
+## Shared Training Recipe
+
+| Setting | k=20/50/100 | k=450 |
+|---|---:|---:|
+| Epochs | 100 | 50 |
+| Batch size | 32 | 32 |
+| Optimizer | SGD | SGD |
+| Learning rate | 0.01 | 0.1 |
+| Momentum | 0.9 | 0.9 |
+| Nesterov | Yes | Yes |
+| Weight decay | 0.0005 | 0.0005 |
+| LR milestones | 30/55/75 | 15/30/40 |
+| LR gamma | 0.1 | 0.2 |
+
+## Method Parameters
+
+| Display label | CLI value | Fixed settings |
+|---|---|---|
+| Raw | `raw` | Deterministic resize/normalize only |
+| Crop + flip | `none` | No additional method |
+| MixUp | `mixup` | alpha=1, probability=1 |
+| CutMix | `cutmix` | alpha=1, probability=0.5 |
+| AugMix | `augmix` | severity=3, width=3, random depth, alpha=1; no JSD loss |
+| SimMixUp | `simmixup` | alpha=1, guided probability=1, no warm-up |
+| SimCutMix | `simcutmix` | alpha=1, guided probability=1, no warm-up |
+
+All methods except `raw` include random crop and horizontal flip.
+
+The runner currently requests class-agnostic K40 neighbors, ranks 21-40,
+uniform sampling for both guided methods. Baseline CutMix mixes only half of
+batches while SimCutMix mixes every batch, so that comparison changes both
+partner selection and mixing frequency. It is not a pure pairing ablation.
 
 ## Execution
 
-### Imported AugMix evidence
-
-The eight historical AugMix runs (ResNet50 and ViT, k=20/50/100/450) are
-stored under `results/comparison_v1/scratch/cifar100/<model>/k<k>/augmix/`.
-Initialization was inferred from the model code at the commits introducing
-the results: `be0824b` for ResNet50 (`weights=None`, CIFAR-adapted stem), and
-`c41ba00` for ViT (randomly initialized VisionTransformer). Each summary
-records `pretrained=false`, the source commit and original paths in provenance.
-The CSV metrics and reported accuracies are unchanged. Checkpoints were not
-included in the imported Git files.
-
-These runs appear in the scratch accuracy-by-k and coverage figures, with a
-separate model panel for ViT. Their original 100-epoch LR 0.1 schedule with
-milestones 30/60/80 and gamma 0.2 is preserved. They are historical evidence,
-not new fixed-protocol runs; recipe-matched comparisons still require the
-same training recipe.
-
-### Figures
-
-Use the same plotting program for both initializations:
+Run from the repository root. Omit `-Execute` to print the Python command
+without training:
 
 ```powershell
-python src/graphs/plot_graphs.py --experiments-dir results/comparison_v1 --output-dir docs/figures
-```
-
-The default output root is `docs/figures`. Outputs are written under
-`docs/figures/scratch/` and `docs/figures/pretrained/`, each with
-the same figure types and a `runs.csv` listing the contributing summaries.
-Historical and current scratch runs share `docs/figures/scratch/`; rerunning
-the plotter replaces the generated figures and `runs.csv` in that directory.
-Training records are not overwritten. Summaries without an
-explicit initialization go to `docs/figures/unknown/`. Empty groups produce no figures.
-Use `--initialization pretrained` or `--initialization scratch` to select a regime.
-Different training recipes are not averaged as repeated seeds.
-
-Run from the project root in PowerShell. Each line below runs ONE experiment. Omitting -Execute prints the underlying Python command without training. No training was launched while preparing this plan.
-
-56 total runs. Prioritize CutMix and SimCutMix at k=20/50/100 in both regimes; then remaining methods; k=450 last.
-
-## scratch
-
-```powershell
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 20 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 50 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 100 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization scratch -K 450 -Method simcutmix -Execute
-```
-
-## pretrained
-
-```powershell
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method mixup -Execute
+.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method cutmix
 .\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 50 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 100 -Method simcutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method raw -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method none -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method mixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method cutmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method augmix -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method simmixup -Execute
-.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 450 -Method simcutmix -Execute
 ```
+
+Parameters:
+
+- `-Initialization`: `scratch` or `pretrained`.
+- `-K`: 20, 50, 100, or 450.
+- `-Method`: `raw`, `none`, `mixup`, `cutmix`, `augmix`, `simmixup`, or
+  `simcutmix`.
+
+The full design is 56 cells (2 initializations x 4 budgets x 7 methods).
+
+Guided execution currently requires local files such as:
+
+```text
+results/experiments/shared/neighbors/cifar100/k20_seed0/
+  neighbors_class_agnostic_K40.pt
+```
+
+Those payloads are not present in the verified checkout and must be regenerated
+before executing a guided command.
+
+## Output Layout
+
+```text
+results/comparison_v1/<initialization>/cifar100/resnet50/k<k>/<method>/
+  [class_agnostic_k40_r<window>/]
+  e<epochs>_s0_t0_c<config-id>/
+```
+
+Each completed run should contain `metrics.csv`, `summary.json`, and a local
+`checkpoint_best.pt`.
+
+## Current Coverage
+
+| Initialization | k=20 | k=50 | k=100 | k=450 | Total records |
+|---|---:|---:|---:|---:|---:|
+| Pretrained | 7/7 | 7/7 | 7/7 | 0/7 | 21 |
+| Scratch group | 7/7 | 7/7 | 7/7 | 7/7 | 28 |
+
+The scratch rows include imported historical records and are not all products
+of the current 224x224 runner. See the cohort notes below.
+
+## Evidence Deviations and Cohorts
+
+### Imported historical scratch records
+
+Most scratch ResNet50 results were created with an older CIFAR-adapted
+32x32 ResNet50 (3x3 stride-1 stem, no initial max-pool, CIFAR normalization)
+and later imported. Their summaries are marked
+`cohort=historical_from_scratch`. Historical AugMix runs additionally retain
+their original 100-epoch LR 0.1, milestones 30/60/80 recipe.
+
+Current scratch records use the standard 224x224 architecture. The plotter
+uses cohort and recipe fields to avoid matching or averaging incompatible
+runs.
+
+### Pretrained guided rank windows
+
+The tracked pretrained evidence does not exactly match the runner for
+SimMixUp:
+
+- Pretrained SimCutMix at k=20/50/100 uses class-agnostic ranks 21-40.
+- Pretrained SimMixUp at k=20/50/100 uses class-agnostic ranks 1-10.
+
+Therefore, rerunning the current script with `-Method simmixup` would create a
+different configuration (ranks 21-40), not reproduce the tracked pretrained
+SimMixUp result. Use the recorded `summary.json` configuration when exact
+reproduction is intended. This discrepancy should be resolved before the
+multi-seed phase by either updating the runner to the selected method-specific
+configuration or rerunning SimMixUp under the shared window.
+
+## Figure Generation
+
+```powershell
+python src\graphs\plot_graphs.py --experiments-dir results\comparison_v1 --output-dir docs\figures
+```
+
+Outputs are replaced in `docs/figures/scratch/` and
+`docs/figures/pretrained/`. Each contains:
+
+- `runs.csv`;
+- `matched_test_accuracy.png`;
+- `matched_validation_curves.png`;
+- `matched_overfitting_gap.png`;
+- `available_test_accuracy_vs_k.png`;
+- `experiment_coverage.png`.
+
+The plotter keeps different initializations, architecture cohorts, and shared
+training recipes separate. Method-specific settings are labeled but do not
+make a run a repeated seed of another configuration.
+
+## Reporting Rules
+
+- Call every current value a single-run result.
+- Report initialization and cohort with the number.
+- Do not combine scratch and pretrained accuracies.
+- Do not interpret epoch-to-epoch variation as seed uncertainty.
+- Do not claim ranks 1-10 or 21-40 are globally optimal.
+- Do not attribute CutMix/SimCutMix differences solely to partner selection
+  while their application probabilities differ.
+- Use validation evidence, not test accuracy, to select configurations for
+  multi-seed confirmation.
