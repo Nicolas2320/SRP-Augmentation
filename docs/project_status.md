@@ -1,142 +1,158 @@
-# SRP-Augmentation Project Status
+# Project Status
 
-Last verified: 2026-07-26
-
-**2026-09-15 update:** ResNet50 switched from training from scratch
-(`weights=None`, CIFAR-adapted stem) to an ImageNet-pretrained ResNet50
-fine-tuned at 224x224, per supervisor feedback. All 19 from-scratch ResNet50
-CIFAR-100 results below are superseded and were archived to
-`../SRP-old_experiments/resnet50_from_scratch/` (see
-`results/experiments/artifact_cleanup_log.json`). The active canonical tree
-currently has no ResNet50 results until the pretrained recipe is re-run; the
-ResNet50 numbers in this file predate that switch and are kept only as a
-historical record.
+Last verified: 2026-09-28.
 
 ## Current Stage
 
-The repository is in the focused experimental-comparison stage. The data,
-training, standard augmentation, similarity-guided pairing, neighbor
-construction, anchor scoring, and result-writing pipelines are implemented and
-covered by tests.
+The implementation and first comparison matrix are substantially complete.
+The immediate scientific task is no longer basic pipeline construction; it is
+to choose defensible final configurations using validation evidence and repeat
+them across multiple subset/training seeds.
 
-The immediate research goal is to complete the scheduled-training baseline
-matrix, preselect final configurations, and validate them across multiple
-seeds. Historical no-LR-schedule experiments have been separated from the
-active evidence set.
-
-For setup and system orientation, use the
-[project README](../README.md) and [architecture guide](architecture.md).
-
-## Sources of Truth
-
-| Source | Owns |
-|---|---|
-| `README.md` | Setup, entry points, and first-run instructions. |
-| `docs/architecture.md` | System components and data flow. |
-| `docs/reproducibility.md` | Reproduction requirements and limitations. |
-| `docs/project_status.md` | Current work, known gaps, and next tasks. |
-| `notes/current_results_summary.md` | Active-result interpretation. |
-| `results/experiments/README.md` | Experiment-folder conventions. |
-| `results/experiments/manifest.csv` | Generated sortable index of active run summaries. |
-
-The manifest is derived data. Regenerate it after adding or moving canonical
-summaries rather than editing it manually.
+The current tracked evidence is exploratory: every result uses subset seed 0
+and training seed 0. No single-run difference should be described as
+statistically significant.
 
 ## Implemented Scope
 
-- CIFAR-10 and CIFAR-100 k-shot splits with a fixed validation set.
-- ResNet50 and ViT training through `src/train.py`.
-- Standard methods: none, MixUp, CutMix, and AugMix.
-- Proposed methods: SimMixUp and SimCutMix.
-- Class-aware, class-agnostic, and different-label neighbor modes.
-- Neighbor rank windows, uniform or weighted pairing, mix probability, and
-  warmup.
-- Optional anchor-score gating and dynamic neighbor pools.
-- Canonical metrics, summaries, best-validation checkpoints, manifest
-  generation, artifact auditing, and comparison plots.
+- CIFAR-10 and CIFAR-100 fixed-validation, k-shot splits.
+- Standard 224x224 ResNet50 with scratch or ImageNet initialization.
+- Scratch-trained 32x32 CIFAR ViT.
+- Raw, crop+flip, MixUp, CutMix, and AugMix baselines.
+- SimMixUp and SimCutMix with class-aware, class-agnostic, or different-label
+  neighbors.
+- Rank windows, uniform/weighted sampling, warm-up, anchor gating, and dynamic
+  neighbor pools.
+- Validation-only runs, best-checkpoint test evaluation, recipe-aware plots,
+  artifact audits, and 73 passing tests.
 
-## Active Evidence Inventory
+## Evidence Inventory
 
-The canonical `results/experiments/` tree contains:
+The active evidence root is `results/comparison_v1/`.
 
-- 20 complete `summary.json` and `metrics.csv` pairs;
-- 8 ResNet50 scheduled-training runs and 12 ViT baseline runs;
-- 6 k=100, 5 k=20, 5 k=50, and 4 k=450 runs;
-- zero incomplete run folders or unmatched checkpoints requiring retention
-  review.
+| Group | Models | Budgets | Summary/metrics pairs |
+|---|---|---|---:|
+| `pretrained` | ResNet50 | k=20/50/100 | 21 |
+| `scratch` | ResNet50 | k=20/50/100/450 | 28 |
+| `scratch` | ViT | k=20/50/100/450 | 22 |
+| **Total** |  |  | **71** |
 
-The generated manifest contains 20 unique experiment IDs and indexes all
-active summaries.
+The pretrained ResNet50 matrix is complete for seven methods at k=20/50/100:
+raw, none, MixUp, CutMix, AugMix, SimMixUp, and SimCutMix. It has no k=450
+runs. The scratch ResNet50 matrix has seven methods at all four budgets. ViT
+has six methods at k=20/50/100 and four baselines at k=450; it has no tracked
+raw runs and no guided k=450 runs.
 
-On 2026-07-26, 46 earlier ResNet50 runs without the current learning-rate
-schedule, including K100 ablations and legacy runs, were moved to:
+There are 43 referenced local best checkpoints for 71 run records. All 71
+summaries have matching metrics. Four additional checkpoint files are in
+incomplete run folders and require a retention decision.
 
-```text
-../SRP-old_experiments/historical_no_lr_schedule/
-```
+## Current Pretrained ResNet50 Results
 
-The sibling archive is intentionally outside the Git repository. It contains a
-46-run manifest, the original 66-run manifest, documentation snapshots, 52
-locally available `.pt` payloads, and neighbor support used only by archived
-experiments. The active cleanup ledger records the move and destination.
+Test accuracy on CIFAR-100, one run per cell:
 
-## Current Scientific Evidence
+| Method | k=20 | k=50 | k=100 |
+|---|---:|---:|---:|
+| Raw | 65.33% | 73.26% | 77.33% |
+| Crop + flip (`none`) | 66.73% | 72.90% | 76.88% |
+| MixUp | 67.66% | 73.47% | 77.72% |
+| CutMix | **68.88%** | **75.75%** | 79.89% |
+| AugMix | 62.37% | 71.02% | 75.43% |
+| SimMixUp | 44.75% | 74.39% | **80.13%** |
+| SimCutMix | 67.90% | 75.13% | 78.53% |
 
-- Scheduled ResNet50 SimCutMix reaches `46.16%` test accuracy at k=100,
-  compared with `43.20%` for scheduled CutMix.
-- At k=450, scheduled CutMix reaches `72.70%`, compared with `71.60%` for
-  SimCutMix. This negative proposal result remains part of the active evidence.
-- The k=20 and k=50 SimCutMix results are `16.40%` and `28.65%`, respectively,
-  but matching scheduled baselines have not yet been run.
-- CutMix is the strongest recorded ViT baseline at k=20, k=50, and k=100.
-- Similarity-guided methods still require multi-seed validation before final
-  claims.
+Interpretation:
 
-See [Current Experiment Results](../notes/current_results_summary.md) for the
-active tables and missing comparison matrix.
+- At k=20, CutMix is strongest. SimCutMix is 0.98 percentage points lower;
+  the tracked SimMixUp configuration is substantially worse.
+- At k=50, CutMix is strongest. SimCutMix is 0.62 points lower, while SimMixUp
+  is 0.92 points above MixUp but 1.36 points below CutMix.
+- At k=100, SimMixUp is strongest at 80.13%, 0.24 points above CutMix and 2.41
+  points above MixUp. SimCutMix is 1.36 points below CutMix.
 
-## Known Research Gaps
+These results do not establish that guided pairing is generally superior. The
+only best-in-column guided result is SimMixUp at k=100, and its advantage over
+CutMix is small relative to the missing seed-level uncertainty.
 
-- Scheduled none, MixUp, CutMix, and optionally AugMix baselines are missing at
-  k=20 and k=50.
-- Scheduled none, MixUp, and optionally AugMix baselines are missing at k=100.
-- K450 AugMix is missing if AugMix remains in the final baseline set.
-- Multi-seed aggregation is still missing.
+Configuration caveat: the tracked pretrained SimMixUp runs use
+class-agnostic ranks 1-10, whereas pretrained SimCutMix uses ranks 21-40. This
+means they are method-specific selected configurations, not a shared
+pairing-only ablation.
 
-## Known Reproducibility and Artifact Gaps
+## Scratch-Group Evidence
 
-- Two active ViT AugMix summaries, at k=20 and k=50, reference checkpoints that
-  are not present locally. Their metrics and summaries are complete.
-- Large `.pt` artifacts are ignored by Git, so a fresh clone does not include
-  local checkpoints, embeddings, or neighbor payloads.
-- Existing summaries record experiment configuration but not the Git commit,
-  Python version, PyTorch/CUDA versions, or GPU.
-- `requirements.txt` is an install specification rather than an exact
-  environment lock.
-- Twenty-four ignored smoke, failed, incomplete, superseded, or unmatched
-  checkpoints were permanently deleted in two reviewed batches on 2026-07-26.
-  Their paths, sizes, and hashes are retained in
-  `results/experiments/artifact_cleanup_log.json`.
-- The current artifact audit reports zero retention-review candidates and zero
-  noncanonical result locations.
+The scratch figure group contains useful exploratory results for ResNet50 and
+ViT, including imported historical cohorts. It must not be presented as one
+uniform modern training recipe.
+
+- Most scratch ResNet50 and all ViT records are tagged
+  `historical_from_scratch` and reflect the architecture/recipe in use when
+  they were produced.
+- Some current scratch ResNet50 records use the standard 224x224 architecture.
+- The plotting code includes architecture/recipe cohort in matching and does
+  not pool incompatible records as repeated seeds.
+
+The older headline result, scratch ResNet50 SimCutMix 46.16% versus CutMix
+43.20% at k=100, remains a valid record within its matched historical cohort.
+It is not the current pretrained result and should not be used to describe the
+ImageNet-initialized classifier.
+
+## Reproducibility and Artifact Gaps
+
+- Multi-seed repeats and confidence intervals are absent.
+- Pretrained k=450 is absent.
+- Guided neighbor `.pt` payloads referenced by summaries are absent locally.
+- Twenty-eight tracked runs lack their referenced best checkpoint locally.
+- Four local checkpoints belong to incomplete run folders.
+- Historical summaries do not capture Git commit, Python, PyTorch/CUDA, GPU,
+  or a fully resolved environment.
+- `requirements.txt` is bounded but not a lock file.
+- Baseline CutMix applies with probability 0.5, while SimCutMix applies with
+  probability 1.0 in the fixed protocol; their difference is not partner
+  selection alone.
+- The local AugMix implementation uses ordinary cross-entropy and omits the
+  AugMix paper's JSD consistency loss.
+
+## Current Documentation and Evidence Sources
+
+| Source | Role |
+|---|---|
+| Root `README.md` | Setup and common entry points |
+| `docs/architecture.md` | System and artifact flow |
+| `docs/reproducibility.md` | Reproduction requirements and limitations |
+| `docs/resnet_comparison_v1.md` | Fixed comparison recipe and deviations |
+| `docs/project_status.md` | Date-sensitive status and interpretation |
+| `docs/figures/<initialization>/runs.csv` | Generated index of plotted summaries |
+| `results/comparison_v1/**/summary.json` | Authoritative per-run configuration/result |
+
+The March proposal and dated meeting brief are historical records, not current
+sources of truth.
 
 ## Next Research Tasks
 
-1. Complete the scheduled-training baseline matrix.
-2. Preselect one final proposal configuration per comparison budget using
-   validation evidence rather than test-score cherry-picking.
-3. Run multiple subset and training seeds.
-4. Generate final aggregate tables and figures.
+1. Decide the validation-based rule for choosing one SimMixUp and one
+   SimCutMix configuration; do not choose solely from test accuracy.
+2. Regenerate and durably store the required embedding/neighbor payloads.
+3. Run selected baseline and guided configurations for subset seeds 1/2 and
+   multiple training seeds.
+4. Decide whether pretrained k=450 is necessary for the final research claim.
+5. Report mean, standard deviation, run count, and individual seeds.
+6. Add pairing-only ablations with equal mixing probability if attributing an
+   effect specifically to partner selection.
 
-## Next Repository-Maintenance Tasks
+## Next Repository Tasks
 
-1. Decide which final-run checkpoints need durable external storage.
-2. Introduce a locked experiment environment and record environment metadata
-   in future summaries.
+1. Review the four checkpoints in incomplete run folders.
+2. Decide which best checkpoints and guided support payloads need durable
+   external storage.
+3. Capture Git/environment metadata automatically in future summaries.
+4. Add a comparison-specific manifest command or make the generic manifest
+   builder accept explicit input/output roots.
 
 ## Bottom Line
 
-The active result tree now contains only scheduled ResNet50 comparisons and the
-retained ViT baseline grid. Final scientific claims depend on completing
-matched baselines and running multi-seed comparisons. Environment capture
-remains a limitation of exact reproduction.
+The code and single-seed comparison evidence are in place. For the current
+pretrained ResNet50 study, CutMix leads at k=20 and k=50, while SimMixUp leads
+at k=100 by 0.24 percentage points. That pattern is interesting but not yet a
+final claim. Multi-seed experiments, support-artifact recovery, and stricter
+pairing-only controls are the critical next steps.

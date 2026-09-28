@@ -38,6 +38,39 @@ DEFAULT_EXPERIMENTS_DIR = Path("results/comparison_v1")
 # Use --output-dir for local, throwaway figure generation instead.
 DEFAULT_FIGURES_DIR = Path("docs/figures")
 
+
+def find_repository_root(start: Path) -> Path:
+    """Return the nearest Git repository root, falling back to the CWD."""
+    resolved = Path(start).resolve()
+    for candidate in (resolved, *resolved.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return Path.cwd().resolve()
+
+
+def portable_runs_table(runs: pd.DataFrame, repo_root: Path) -> pd.DataFrame:
+    """Copy a run table with repository-local artifact paths made portable."""
+    portable = runs.copy()
+    root = Path(repo_root).resolve()
+
+    def make_relative(value: Any) -> Any:
+        if value is None or pd.isna(value):
+            return value
+        path = Path(str(value))
+        if not path.is_absolute():
+            return path.as_posix()
+        try:
+            return path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            # An external artifact cannot be represented as a meaningful
+            # repository-relative path, so preserve it rather than lying.
+            return path.as_posix()
+
+    for column in ("summary_path", "metrics_path"):
+        if column in portable.columns:
+            portable[column] = portable[column].map(make_relative)
+    return portable
+
 METHOD_ORDER = ["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 # "raw" (no crop/flip) is a separate ablation floor, not a mixing baseline, so
 # it is intentionally excluded here: proposal methods are only compared
@@ -1698,9 +1731,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def generate_figures(runs: pd.DataFrame, output_dir: Path) -> None:
+def generate_figures(
+    runs: pd.DataFrame,
+    output_dir: Path,
+    repo_root: Path | None = None,
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
-    runs.to_csv(output_dir / "runs.csv", index=False)
+    portable_runs_table(runs, repo_root or Path.cwd()).to_csv(
+        output_dir / "runs.csv", index=False
+    )
     aggregated = aggregate_runs(runs)
     comparisons = build_all_baseline_comparisons(runs)
     epoch_metrics = load_epoch_metrics(runs)
@@ -1741,11 +1780,12 @@ def main() -> None:
     args = parse_args()
     configure_plot_style()
     runs = load_summary_metrics(args.experiments_dir)
+    repo_root = find_repository_root(args.experiments_dir)
     groups = list(figure_groups(runs, args.output_dir or DEFAULT_FIGURES_DIR, args.initialization))
     if not groups:
         print(f"No runs found for initialization={args.initialization}; no figures generated.")
     for group, output_dir in groups:
-        generate_figures(group, output_dir)
+        generate_figures(group, output_dir, repo_root=repo_root)
 
 
 if __name__ == "__main__":

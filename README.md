@@ -1,373 +1,204 @@
 # SRP-Augmentation
 
-SRP-Augmentation is a research codebase for comparing image augmentation
-methods in low-data image classification. It supports controlled CIFAR-10 and
-CIFAR-100 experiments with reproducible k-shot subsets, an optionally ImageNet-pretrained
-ResNet50 (fine-tuned at 224x224) and a CIFAR-adapted ViT, standard augmentation
-baselines, and similarity-guided mixing.
+SRP-Augmentation is a research codebase for evaluating image augmentation in
+low-data image classification. It provides reproducible CIFAR-10/CIFAR-100
+k-shot splits, ResNet50 and ViT classifiers, standard augmentation baselines,
+and similarity-guided variants of MixUp and CutMix.
 
 The project is a Student Research Project at the University of Hildesheim.
 
-## At a Glance
+## Research Question
 
-**Research question:** Which augmentation strategies improve classification
-most reliably when only a small number of labeled examples are available, and
-can similarity-guided mixing improve on standard baselines?
-
-**Implemented methods:**
+Which augmentation strategies improve classification most reliably when only
+a small number of labeled examples are available, and can selecting mixing
+partners by visual similarity improve on standard random pairing?
 
 | Family | Methods |
 |---|---|
-| No-augmentation baseline | Raw (no crop/flip, no mixing) |
-| Standard | None (crop+flip only), MixUp, CutMix, AugMix |
-| Proposed | SimMixUp, SimCutMix |
-| Optional guided strategies | Class-aware, class-agnostic, different-label, anchor-gated, and dynamic neighbor pools |
+| Reference baselines | Raw; crop + horizontal flip (`none`) |
+| Standard augmentation | MixUp, CutMix, AugMix |
+| Proposed augmentation | SimMixUp, SimCutMix |
 
-**Current stage:** The training and guided-pairing pipelines are implemented.
-The project is comparing final configurations and still needs multi-seed
-validation before making final claims. See
-[Project Status](docs/project_status.md) for the current evidence and open
-questions.
+The current comparison study uses CIFAR-100. All available results are
+single-run observations with subset seed 0 and training seed 0; they are not
+statistical estimates. See [Project Status](docs/project_status.md) for the
+verified evidence inventory and open work.
 
-## Start Here
+## Documentation
 
-New collaborators should read these files in order:
+Start with the [documentation index](docs/README.md). The main guides are:
 
-1. This README for setup and first commands.
-2. [Architecture](docs/architecture.md) for the data and training flow.
-3. [Reproducibility](docs/reproducibility.md) before running experiments.
-4. [Project Status](docs/project_status.md) for current results and known gaps.
-5. [Current Results Summary](notes/current_results_summary.md) for the
-   detailed scientific narrative.
+1. [Architecture](docs/architecture.md) - components and data flow.
+2. [Reproducibility](docs/reproducibility.md) - setup, commands, and artifact
+   requirements.
+3. [ResNet50 comparison protocol](docs/resnet_comparison_v1.md) - the fixed
+   comparison recipe and run matrix.
+4. [Project status](docs/project_status.md) - current evidence, limitations,
+   and next tasks.
 
-The original project proposal is available at
-[`docs/Proposal_SRP.pdf`](docs/Proposal_SRP.pdf).
-
-## Current Visual Evidence
-
-The figures below are generated from the tracked experiment summaries and
-epoch metrics by `src/graphs/plot_graphs.py`. They are committed so GitHub
-always shows the current evidence alongside the underlying records.
-
-**Note (2026-09-15):** ResNet50 switched from training from scratch to an
-ImageNet-pretrained ResNet50 fine-tuned at 224x224 (see
-[Project Status](docs/project_status.md)). The ResNet50 results shown below
-predate that switch and have been archived; the canonical tree currently has
-no ResNet50 results until the pretrained recipe is re-run and these figures
-are regenerated.
-
-### Direct proposal-versus-baseline comparisons
-
-This is the primary result figure: it compares each proposed method with all
-available standard baselines under the same recorded training recipe. Missing
-baseline runs remain blank. It currently reports single-run comparisons, so it
-does not imply statistical significance. Connected points show the baseline to
-proposal change, and each displayed Δ is proposal minus baseline in percentage
-points.
-
-![Matched proposal-versus-baseline test accuracy](docs/figures/matched_test_accuracy.png)
-
-### Available results across data budgets
-
-This view shows all available active results for both ResNet50 and ViT. Missing
-method--k combinations remain blank rather than being estimated, so it also
-shows where further matched runs are still needed.
-
-![Available ResNet50 and ViT test accuracy across k](docs/figures/available_test_accuracy_vs_k.png)
-
-### Validation trajectories for direct comparisons
-
-The validation curves show each proposal together with all available matched
-baseline trajectories and mark the best-validation checkpoints used for the
-corresponding test measurements.
-
-![Matched validation trajectories](docs/figures/matched_validation_curves.png)
-
-### Train-versus-validation accuracy gap
-
-This view plots the per-epoch gap between training and validation accuracy for
-each proposal panel alongside every matched baseline. A larger gap indicates
-more memorization relative to what generalizes to validation. Stars mark each
-run's best-validation checkpoint. Train accuracy under MixUp, CutMix,
-SimMixUp, and SimCutMix uses partial-credit mixed-label accuracy (as in the
-original papers), so it is not directly comparable in absolute terms to
-clean-label "No augmentation" train accuracy.
-
-![Train-versus-validation accuracy gap](docs/figures/matched_overfitting_gap.png)
-
-The [coverage matrix](docs/figures/experiment_coverage.png) provides the
-complete experiment-status view, including missing cells and run counts.
+The [original proposal](docs/Proposal_SRP.pdf) is retained as a historical
+project artifact. It describes the March 2026 plan, not the current state.
 
 ## Repository Structure
 
 ```text
 SRP-Augmentation/
-├── data/
-│   ├── raw/                    # Local CIFAR downloads; ignored by Git
-│   └── splits/                 # Committed validation and k-shot indices
-├── docs/
-│   ├── architecture.md         # System and experiment flow
-│   ├── figures/                # Versioned figures displayed on GitHub
-│   ├── project_status.md       # Current stage, evidence, and gaps
-│   ├── reproducibility.md      # Reproduction checklist and limitations
-│   └── Proposal_SRP.pdf        # Original research proposal
-├── notebooks/                  # Exploratory and visual validation notebooks
-├── notes/
-│   └── current_results_summary.md
-├── results/
-│   └── experiments/            # Canonical run records and shared artifacts
-├── src/
-│   ├── augmentations/          # MixUp, CutMix, AugMix, SimMixUp, SimCutMix
-│   ├── data/                   # Split generation and indexed datasets
-│   ├── experiments/            # Manifest generation
-│   ├── graphs/                 # Result plotting
-│   ├── models/                 # CIFAR ResNet50 and ViT
-│   ├── proposal/               # Embeddings, neighbors, inspection, scoring
-│   └── train.py                # Unified experiment entry point
-├── tests/                      # Unit and small integration tests
-├── requirements.txt
-└── README.md
+|-- data/
+|   |-- raw/                         # Local CIFAR downloads; ignored by Git
+|   `-- splits/                      # Committed validation and k-shot indices
+|-- docs/
+|   |-- figures/{scratch,pretrained}/
+|   |-- architecture.md
+|   |-- project_status.md
+|   |-- reproducibility.md
+|   `-- resnet_comparison_v1.md
+|-- notebooks/                       # Split and guided-pair inspection
+|-- results/comparison_v1/           # Current comparison records
+|-- scripts/run_resnet_comparison.ps1
+|-- src/
+|   |-- augmentations/
+|   |-- data/
+|   |-- experiments/
+|   |-- graphs/
+|   |-- models/
+|   |-- proposal/
+|   `-- train.py
+`-- tests/
 ```
-
-`src/proposal/` is the implementation area for the proposed
-similarity-guided method. It is not an abandoned prototype.
 
 ## Setup
 
-Run commands from the repository root.
-
-### 1. Create and activate a virtual environment
+Run commands from the repository root in PowerShell.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-### 2. Install dependencies
-
-```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-```
-
-The current requirements select CUDA 12.8 builds of PyTorch and TorchVision.
-They are an installation specification rather than a fully locked research
-environment. Read [Reproducibility](docs/reproducibility.md) before producing
-results intended for the final report.
-
-### 3. Run the tests
-
-```powershell
 python -m unittest discover -s tests -v
 ```
 
-The test suite does not download CIFAR or launch a full training run.
+`requirements.txt` selects CUDA 12.8 builds of PyTorch and TorchVision. It is
+an installation specification, not a fully locked environment. Read
+[Reproducibility](docs/reproducibility.md) before producing reportable runs.
 
 ## Data Splits
 
-The committed files under `data/splits/` are the authoritative experiment
-subsets. They contain original CIFAR training-set indices, not image data.
+The committed JSON files under `data/splits/` are the authoritative sample
+selections. CIFAR-100 has one fixed validation split (50 images per class),
+k-shot subsets for k=5/10/20/50/100 with seeds 0/1/2, and a maximum k=450
+subset with seed 0. Existing experiments should reuse these files.
 
-Each dataset has:
-
-- one fixed validation split;
-- k-shot training subsets for seeds 0, 1, and 2;
-- one maximum post-validation training subset at seed 0.
-
-For CIFAR-100, the maximum setting is `k=450`: 450 training images and 50
-validation images per class.
-
-Existing experiments should use the committed splits. To intentionally
-regenerate the full split collection:
+To intentionally rebuild the collection:
 
 ```powershell
 python src\data\make_splits.py
 ```
 
-TorchVision downloads missing CIFAR data into `data/raw/`. That directory is
-ignored by Git.
+Missing CIFAR files are downloaded to the ignored `data/raw/` directory.
 
-## Run a Standard Experiment
+## Run the Fixed ResNet50 Comparison
 
-The unified entry point is `src/train.py`. This example runs a CIFAR-100
-ResNet50 CutMix experiment:
+The safest entry point for the active comparison is the PowerShell runner. It
+prints the command by default; add `-Execute` to train.
 
 ```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 128 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 60 80 --lr-gamma 0.2 --num-workers 2
+.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method cutmix
+.\scripts\run_resnet_comparison.ps1 -Initialization pretrained -K 20 -Method cutmix -Execute
 ```
 
-**ResNet50 starts from scratch by default.** Use `--pretrained` for ImageNet
-initialization or `--no-pretrained` explicitly for scratch. Both use the same
-224x224 architecture and preprocessing (see `src/models/resnet.py`).
-The fixed comparison recipe and individual commands are in
-[the comparison protocol](docs/resnet_comparison_v1.md).
-Before a full run, consider:
+Valid initialization values are `scratch` and `pretrained`; valid methods are
+`raw`, `none`, `mixup`, `cutmix`, `augmix`, `simmixup`, and `simcutmix`.
+ResNet50 uses the standard 224x224 torchvision architecture and ImageNet
+normalization in both regimes. `scratch` means random classifier weights;
+`pretrained` means ImageNet initialization followed by full fine-tuning.
 
-- Lowering `--lr` (e.g. `0.01`): `0.1` is a large step for fine-tuning
-  pretrained weights and can destroy them in the first few epochs.
-- Lowering `--batch-size` if you hit an out-of-memory error: 224x224 inputs use
-  roughly 49x the memory per image of the previous 32x32 pipeline.
-- Expecting substantially longer wall-clock time per epoch for the same
-  reason.
+See [the protocol](docs/resnet_comparison_v1.md) before adding runs. The runner
+expects guided neighbor payloads under `results/experiments/shared/neighbors/`,
+which are local generated artifacts and are not currently present in this
+checkout.
 
-Supported datasets:
+## Run a Custom Experiment
 
-- `cifar10`
-- `cifar100`
+`src/train.py` is the unified CLI. This example is a validation-only-safe
+starting point for a standard method:
 
-Supported models:
+```powershell
+python -u src\train.py --dataset cifar100 --model resnet50 --pretrained --k 20 --subset-seed 0 --train-seed 0 --augmentation cutmix --cutmix-alpha 1 --cutmix-prob 0.5 --epochs 100 --batch-size 32 --optimizer sgd --lr 0.01 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 30 55 75 --lr-gamma 0.1 --num-workers 2 --skip-test
+```
 
-- `resnet50`
-- `vit`
+Use `--skip-test` while choosing configurations. Once a configuration is fixed,
+rerun without that option to evaluate the best-validation checkpoint on the
+test set. Use `python src\train.py --help` for all options.
 
-Supported augmentations:
+Augmentation semantics:
 
-- `raw` — no crop/flip, no mixing. The true no-augmentation baseline.
-- `none` — random crop + horizontal flip only, no mixing.
-- `mixup`
-- `cutmix`
-- `augmix`
-- `simmixup`
-- `simcutmix`
+- `raw`: deterministic preprocessing only; no crop, flip, or mixing.
+- `none`: random crop and horizontal flip; no additional method.
+- `mixup`, `cutmix`, and `augmix`: crop + flip plus the selected method.
+- `simmixup` and `simcutmix`: crop + flip plus similarity-guided pairing.
 
-Every training method except `raw` starts with random crop and horizontal
-flip. Therefore, `--augmentation none` means no additional mixing method;
-spatial augmentation is still active. `mixup`, `cutmix`, `augmix`, `simmixup`,
-and `simcutmix` all apply their mixing on top of that same crop+flip
-pipeline, so `raw` is not a fair baseline to compare mixing methods against —
-it exists only to show the effect of crop+flip itself, isolated from mixing.
+## Similarity-Guided Workflow
 
-Use `python src\train.py --help` for the complete option list.
-
-## Run a Similarity-Guided Experiment
-
-SimMixUp and SimCutMix select partners from precomputed nearest-neighbor sets.
-The minimum workflow has three stages.
-
-### 1. Compute embeddings
+Guided runs require an offline support pipeline.
 
 ```powershell
 python -u src\proposal\compute_embeddings.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --batch-size 64 --num-workers 2 --device auto
-```
-
-### 2. Build and inspect neighbors
-
-```powershell
 python -u src\proposal\build_neighbors.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40 --query-batch-size 512 --device auto
 python -u src\proposal\inspect_neighbors.py --dataset cifar100 --k 20 --subset-seed 0 --encoder resnet50_imagenet --mode class_agnostic --max-neighbors 40
 ```
 
-Neighbor search is exact and blockwise. Reducing `--query-batch-size` lowers
-memory use without changing the neighbor result.
+Then pass the generated payload with `--neighbor-path`. A saved K40 set can be
+restricted to a rank window with `--neighbor-rank-start` and `--neighbor-k`.
+See [Reproducibility](docs/reproducibility.md) for a complete example.
 
-### 3. Train with the neighbor file
+## Outputs
 
-```powershell
-python -u src\train.py --dataset cifar100 --model resnet50 --k 20 --subset-seed 0 --train-seed 0 --augmentation simcutmix --cutmix-alpha 1 --epochs 50 --batch-size 64 --optimizer sgd --lr 0.1 --momentum 0.9 --nesterov --weight-decay 0.0005 --lr-milestones 15 30 40 --lr-gamma 0.2 --num-workers 2 --neighbor-path "results\experiments\shared\neighbors\cifar100\k20_seed0\neighbors_class_agnostic_K40.pt" --guided-mode class_agnostic --neighbor-k 20 --neighbor-rank-start 21 --pair-sampling uniform --mix-prob 1 --mix-warmup-epochs 0
-```
-
-Here, the saved K40 neighbor set is filtered to ranks 21–40 for training.
-Class-aware, different-label, anchor-gated, and dynamic-pool variants use the
-same pipeline with different CLI settings. See
-[Architecture](docs/architecture.md) for their roles.
-
-## Outputs and Results
-
-New runs are written below:
+`src/train.py` writes one collision-safe directory per scientific
+configuration:
 
 ```text
-results/experiments/<dataset>/<model>/k<k>/<method>/
+<output-root>/<dataset>/<model>/k<k>/<method>/
   [<guided-mode>_k<saved-neighbors>_r<rank-window>/]
   e<epochs>_s<subset-seed>_t<train-seed>_c<config-id>/
+    metrics.csv
+    summary.json
+    checkpoint_best.pt
 ```
 
-The eight-character config ID prevents two runs with different hidden recipe
-settings from overwriting one another. Full optimizer, schedule, and
-augmentation settings remain readable in `summary.json`.
+The active study sets `<output-root>` to
+`results/comparison_v1/<initialization>`. CSV and JSON records are tracked;
+large `.pt` artifacts are generally local.
 
-Each completed run contains:
+## Figures
 
-| File | Purpose |
-|---|---|
-| `metrics.csv` | Per-epoch training and validation metrics. |
-| `summary.json` | Configuration, best validation epoch, and test evaluation. |
-| `checkpoint_best.pt` | Best-validation checkpoint; local and ignored by Git. |
-
-Earlier ResNet50 runs without the current learning-rate schedule are stored in
-the external sibling archive
-`../SRP-old_experiments/historical_no_lr_schedule/` and are not indexed as
-active results.
-
-The central folder documentation and sortable index are:
-
-- [Experiment Folder Guide](results/experiments/README.md)
-- [Experiment Manifest](results/experiments/manifest.csv)
-
-After adding or moving canonical run summaries, regenerate the manifest:
+Regenerate both initialization groups with:
 
 ```powershell
-python src\experiments\build_manifest.py
+python src\graphs\plot_graphs.py --experiments-dir results\comparison_v1 --output-dir docs\figures
 ```
 
-Audit summary/metrics pairs, recorded artifact paths, local `.pt` payloads, and
-checkpoint retention candidates with:
+Outputs are separated into `docs/figures/scratch/` and
+`docs/figures/pretrained/`. Each group includes `runs.csv`, accuracy views,
+validation curves, train-validation gaps, and a coverage matrix. Different
+training recipes and historical architectures are not pooled as repeated
+seeds.
 
-```powershell
-python src\experiments\audit_artifacts.py --details
-```
+Current pretrained ResNet50 evidence:
 
-The audit is read-only unless an explicit `--json-output` path is supplied. It
-never moves or deletes artifacts.
+![Pretrained ResNet50 test accuracy](docs/figures/pretrained/available_test_accuracy_vs_k.png)
 
-Large `.pt` files and raw data are not committed. The curated figures in
-`docs/figures/` are versioned so GitHub can display the current experiment
-evidence; other PNG outputs remain ignored. A fresh clone can inspect the
-tracked metrics and summaries, but guided runs must regenerate or obtain their
-neighbor payloads.
+Current scratch-group evidence (including historical imported cohorts):
 
-## Plotting
-
-Generate the standard comparison figures from saved summaries and metrics:
-
-```powershell
-python src\graphs\plot_graphs.py
-```
-
-The plotting suite writes five views to `docs/figures/` by default. These
-curated figures are versioned and displayed in this README:
-
-- matched proposal-versus-baseline test accuracy;
-- validation curves for those matched comparisons;
-- the train-versus-validation accuracy gap for those matched comparisons;
-- all available active test results, without filling missing cells; and
-- a coverage matrix with the run count in every method/k cell.
-
-Single runs are shown without uncertainty bars. Sample-standard-deviation bars
-and bands appear automatically once repeated runs are available. Stars and
-annotations on the validation curves mark the best-validation epochs whose
-saved checkpoints were evaluated on the test set. Use `--output-dir` to write
-temporary local figures somewhere else without changing the versioned
-publication figures.
+![Scratch-group test accuracy](docs/figures/scratch/available_test_accuracy_vs_k.png)
 
 ## Current Limitations
 
-- Most reported experiments still use a single subset seed and training seed.
-- Two active ViT AugMix summaries reference checkpoints that are not available
-  locally; their tracked metrics and summaries are complete.
-- The environment is not yet captured by an exact lock file or inside run
-  summaries.
-- Current result discrepancies and research tasks are listed in
-  [Project Status](docs/project_status.md).
-
-## Documentation Ownership
-
-To prevent status information from diverging:
-
-- `README.md` owns setup, entry points, and first-run instructions.
-- `docs/architecture.md` owns the system and data-flow explanation.
-- `docs/reproducibility.md` owns reproduction requirements and limitations.
-- `docs/project_status.md` owns current work, known gaps, and next tasks.
-- `notes/current_results_summary.md` owns detailed result interpretation.
-- `results/experiments/README.md` owns the experiment-folder conventions.
-- `results/experiments/manifest.csv` is a generated run index, not a narrative
-  source of truth.
+- Every tracked result uses one subset seed and one training seed.
+- The pretrained ResNet50 comparison has no k=450 runs.
+- Neighbor payloads referenced by guided summaries are not present locally.
+- Only 43 of 71 tracked runs currently have their referenced best checkpoint;
+  four more checkpoints are in incomplete run folders.
+- Environment metadata is not stored in historical summaries.
+- Scratch-group records include historical architecture/recipe cohorts and
+  must only be compared when the plotting code marks their recipes as matched.

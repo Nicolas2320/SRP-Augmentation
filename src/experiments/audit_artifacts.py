@@ -1,9 +1,9 @@
-"""Audit canonical experiment records and local large artifacts.
+"""Audit experiment records and local large artifacts below a selected root.
 
 The audit is read-only unless ``--json-output`` is supplied. It answers three
 maintenance questions:
 
-1. Do canonical summaries have their expected metrics and referenced files?
+1. Do discovered summaries have their expected metrics and referenced files?
 2. Which local ``.pt`` files are connected to summaries or metadata?
 3. Which checkpoints require a manual retention decision?
 
@@ -312,24 +312,33 @@ def print_report(report: dict[str, Any], details: bool = False) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Audit experiment records and local artifacts without deleting them."
+        description=(
+            "Audit summaries, recorded references, and local model/support "
+            "artifacts without deleting or moving anything."
+        )
     )
     parser.add_argument(
         "--results-root",
         type=Path,
-        default=Path("results/experiments"),
-        help="Canonical experiment root.",
+        default=Path("results/comparison_v1"),
+        help=(
+            "Experiment tree to audit recursively "
+            "(default: results/comparison_v1)."
+        ),
     )
     parser.add_argument(
         "--json-output",
         type=Path,
         default=None,
-        help="Optional path for the full machine-readable report.",
+        help=(
+            "Optional destination for the full JSON report. Supplying this "
+            "writes only that report; experiment artifacts remain unchanged."
+        ),
     )
     parser.add_argument(
         "--details",
         action="store_true",
-        help="Print every artifact that requires a retention decision.",
+        help="List every local artifact classified for manual retention review.",
     )
     return parser.parse_args()
 

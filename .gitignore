@@ -6,6 +6,8 @@ results/tuning/
 *.pt
 *.pth
 *.png
+outputs/method-flow
+tmp/
 
 !docs/figures/
 !docs/figures/*.png
