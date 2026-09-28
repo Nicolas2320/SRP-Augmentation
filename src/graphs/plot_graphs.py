@@ -1074,7 +1074,9 @@ def plot_matched_validation_curves(
                 color=COLORS[method],
                 linewidth=2.0,
                 linestyle=line_style,
-                label=f"{label} (n={run_count})",
+                # Keep trajectory legends compact. Configuration details and
+                # run counts remain available in runs.csv and panel context.
+                label=DISPLAY_NAMES.get(method, method),
             )
             if run_count > 1:
                 std = 100.0 * curve["std_val_acc"].fillna(0.0).to_numpy()
@@ -1305,7 +1307,9 @@ def plot_matched_overfitting_gap(
                 color=COLORS[method],
                 linewidth=2.0,
                 linestyle=line_style,
-                label=f"{label} (n={run_count})",
+                # Keep trajectory legends compact. Configuration details and
+                # run counts remain available in runs.csv and panel context.
+                label=DISPLAY_NAMES.get(method, method),
             )
             if run_count > 1:
                 std = 100.0 * curve["std_gap"].fillna(0.0).to_numpy()
