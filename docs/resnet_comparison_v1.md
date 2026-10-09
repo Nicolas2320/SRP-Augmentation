@@ -1,11 +1,12 @@
 # ResNet50 Comparison v1
 
-Last verified: 2026-09-28.
+Last verified: 2026-10-09.
 
-This document defines the fixed command recipe implemented by
-`scripts/run_resnet_comparison.ps1` and records where existing evidence
-deviates from it. It is a common-recipe comparison, not a claim that the
-hyperparameters are optimal for every method or initialization.
+This document defines the fixed command recipe implemented by the local
+`scripts/run_resnet_comparison.ps1` runner and the cluster
+`scripts/run_resnet_comparison.slurm` runner. It records where existing
+evidence deviates from that recipe. It is a common-recipe comparison, not a
+claim that the hyperparameters are optimal for every method or initialization.
 
 ## Scientific Scope
 
@@ -74,6 +75,18 @@ Parameters:
   `simcutmix`.
 
 The full design is 56 cells (2 initializations x 4 budgets x 7 methods).
+
+On the ISMLL cluster, submit from the repository root. Use `smoke` for a
+one-epoch validation-only infrastructure check, or `full` for the recipe above:
+
+```bash
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix full
+```
+
+The smoke mode writes below `results/smoke/` and is not comparison evidence.
+See [ISMLL cluster workflow](cluster_workflow.md) for setup, monitoring, and
+artifact-handling instructions.
 
 Guided execution currently requires local files such as:
 

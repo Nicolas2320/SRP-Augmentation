@@ -1,5 +1,6 @@
 data/raw/
 results/tuning/
+results/smoke/
 .venv/
 *.tar.gz
 *.zip
@@ -8,6 +9,8 @@ results/tuning/
 *.png
 outputs/method-flow
 tmp/
+logs/*
+!logs/.gitkeep
 
 !docs/figures/
 !docs/figures/*.png

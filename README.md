@@ -31,9 +31,11 @@ Start with the [documentation index](docs/README.md). The main guides are:
 1. [Architecture](docs/architecture.md) - components and data flow.
 2. [Reproducibility](docs/reproducibility.md) - setup, commands, and artifact
    requirements.
-3. [ResNet50 comparison protocol](docs/resnet_comparison_v1.md) - the fixed
+3. [ISMLL cluster workflow](docs/cluster_workflow.md) - GitHub synchronization,
+   Slurm execution, and artifact handling.
+4. [ResNet50 comparison protocol](docs/resnet_comparison_v1.md) - the fixed
    comparison recipe and run matrix.
-4. [Project status](docs/project_status.md) - current evidence, limitations,
+5. [Project status](docs/project_status.md) - current evidence, limitations,
    and next tasks.
 
 The [original proposal](docs/Proposal_SRP.pdf) is retained as a historical
@@ -55,6 +57,7 @@ SRP-Augmentation/
 |-- notebooks/                       # Split and guided-pair inspection
 |-- results/comparison_v1/           # Current comparison records
 |-- scripts/run_resnet_comparison.ps1
+|-- scripts/run_resnet_comparison.slurm
 |-- src/
 |   |-- augmentations/
 |   |-- data/
@@ -117,6 +120,15 @@ See [the protocol](docs/resnet_comparison_v1.md) before adding runs. The runner
 expects guided neighbor payloads under `results/experiments/shared/neighbors/`,
 which are local generated artifacts and are not currently present in this
 checkout.
+
+On the ISMLL cluster, submit the Linux/Slurm runner from the repository root:
+
+```bash
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix full
+```
+
+Read the [cluster workflow](docs/cluster_workflow.md) before the first run.
 
 ## Run a Custom Experiment
 
