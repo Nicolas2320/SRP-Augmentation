@@ -102,6 +102,10 @@ sbatch --export=ALL,CONDA_ENV=another-env \
 Guided methods require their generated neighbor payload before submission.
 The job exits early when that payload is absent.
 
+The runner also sets `CUBLAS_WORKSPACE_CONFIG=:4096:8`. PyTorch requires this
+for deterministic cuBLAS matrix multiplications when deterministic algorithms
+are enabled on CUDA 10.2 or newer.
+
 ## Monitor and Inspect
 
 ```bash

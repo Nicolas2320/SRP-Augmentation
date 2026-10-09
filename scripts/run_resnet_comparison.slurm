@@ -152,6 +152,10 @@ printf ' %q' python "${train_args[@]}"
 printf '\n'
 
 export PYTHONUNBUFFERED=1
+# Required by torch deterministic algorithms for reproducible CUDA >= 10.2
+# matrix multiplications. The larger workspace is the recommended performant
+# deterministic cuBLAS configuration and is small relative to GPU memory.
+export CUBLAS_WORKSPACE_CONFIG="${CUBLAS_WORKSPACE_CONFIG:-:4096:8}"
 srun python "${train_args[@]}"
 
 echo "Finished: $(date --iso-8601=seconds)"
