@@ -1,0 +1,28 @@
+{
+  "dataset": "cifar100",
+  "k": 300,
+  "subset_seed": 0,
+  "encoder": "resnet50_imagenet",
+  "split_hash": "6195e0519886ff707c89ecc21946dc7f9b49392dfc9ca826f6ce70807e5b88ab",
+  "validation_split_hash": "3d809f2a6cce21966ac2b1cd4f6d8826d06bb7f817893da24d91cf1c3ce0a9ef",
+  "train_indices_hash": "bd44f199164e8fe929b8294e859aba49dfb9d98533aa69e9599f97d872e80c4b",
+  "split_path": "data/splits/cifar100/k300_seed0.json",
+  "validation_split_path": "data/splits/cifar100/fixed_validation_split.json",
+  "embedding_path": "results/experiments/shared/neighbors/cifar100/k300_seed0/embeddings_resnet50_imagenet.pt",
+  "num_train": 30000,
+  "embedding_dim": 2048,
+  "source_dataset_partition": "torchvision_train_true",
+  "uses_validation_samples": false,
+  "uses_test_samples": false,
+  "validation_overlap_count": 0,
+  "neighbors": {
+    "class_agnostic": {
+      "path": "results/experiments/shared/neighbors/cifar100/k300_seed0/neighbors_class_agnostic_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 59,
+      "search_device": "cuda"
+    }
+  }
+}
