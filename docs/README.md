@@ -10,6 +10,7 @@ and historical project records. Last reviewed: 2026-10-09.
 | [Architecture](architecture.md) | Code layout, data flow, training flow, and artifacts | Current |
 | [Reproducibility](reproducibility.md) | Environment, verification, and reproduction commands | Current |
 | [ISMLL cluster workflow](cluster_workflow.md) | GitHub synchronization, Slurm execution, monitoring, and artifact policy | Current |
+| [Third-presentation job matrix](third_presentation_job_matrix.md) | Supervisor-aligned experiment priorities, job counts, gates, and reporting plan | Current |
 | [ResNet50 comparison v1](resnet_comparison_v1.md) | Fixed protocol, run matrix, and known deviations | Current |
 | [Project status](project_status.md) | Evidence inventory, verified results, gaps, and next work | Current |
 | [Presentation outline](presentation_outline.md) | Suggested presentation based on the current evidence | Current |
