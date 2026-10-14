@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -17,6 +18,7 @@ from src.train import (
     build_cutmix,
     build_model,
     parse_args,
+    run_experiment,
     build_lr_scheduler,
     build_optimizer,
     experiment_config_id,
@@ -190,6 +192,16 @@ class TrainingRecipeTests(unittest.TestCase):
             experiment_config_id(original),
             experiment_config_id(different_lr),
         )
+
+    def test_existing_run_is_never_silently_overwritten(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config = training_config(output_root=temp)
+            output_dir = experiment_output_dir(config)
+            output_dir.mkdir(parents=True)
+            (output_dir / "metrics.csv").write_text("epoch,val_acc\n1,0.5\n")
+
+            with self.assertRaisesRegex(FileExistsError, "Refusing to overwrite"):
+                run_experiment(config, evaluate_test=False)
 
     def test_neighbor_rank_log_omits_per_rank_statistics(self):
         class GuidedDataset:

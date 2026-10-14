@@ -39,8 +39,13 @@ import csv
 import hashlib
 import json
 import math
+import os
+import platform
 import random
 import re
+import subprocess
+import sys
+from datetime import datetime, timezone
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -48,6 +53,7 @@ from typing import Any, Literal
 import numpy as np
 import torch
 import torch.nn as nn
+import torchvision
 from torch.utils.data import DataLoader, Subset, get_worker_info
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100
@@ -955,6 +961,45 @@ def experiment_config_id(config: ExperimentConfig) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
 
 
+def _command_output(command: list[str]) -> str | None:
+    """Return one short diagnostic command result without failing training."""
+    try:
+        return subprocess.check_output(
+            command,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+        ).strip()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def runtime_metadata(device: torch.device) -> dict[str, Any]:
+    """Capture the execution environment needed to interpret a new run."""
+    git_status = _command_output(["git", "status", "--short"])
+    gpu_name = None
+    if device.type == "cuda" and torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(device)
+
+    return {
+        "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _command_output(["git", "rev-parse", "HEAD"]),
+        "git_dirty": bool(git_status),
+        "python": platform.python_version(),
+        "python_executable": sys.executable,
+        "platform": platform.platform(),
+        "pytorch": torch.__version__,
+        "torchvision": torchvision.__version__,
+        "cuda_runtime": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version(),
+        "device": str(device),
+        "gpu": gpu_name,
+        "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+        "slurm_job_name": os.environ.get("SLURM_JOB_NAME"),
+        "hostname": platform.node(),
+    }
+
+
 def guided_variant_name(config: ExperimentConfig) -> str:
     """Build the readable guided-method component of an output path."""
     rank_start = int(config.neighbor_rank_start)
@@ -1153,6 +1198,17 @@ def run_experiment(
     summary_path = output_root / "summary.json"
     checkpoint_path = output_root / "checkpoint_best.pt"
 
+    if not evaluate_only:
+        existing_outputs = [
+            path for path in (metrics_path, summary_path, checkpoint_path) if path.exists()
+        ]
+        if existing_outputs:
+            formatted = "\n".join(f"- {path}" for path in existing_outputs)
+            raise FileExistsError(
+                "Refusing to overwrite an existing run. Remove or relocate the "
+                f"reviewed artifacts explicitly before retrying:\n{formatted}"
+            )
+
     print("Experiment configuration:")
     for key, value in asdict(config).items():
         print(f"  {key}: {value}")
@@ -1217,6 +1273,7 @@ def run_experiment(
                 "test_evaluated": True,
                 "test_loss_best_checkpoint": test_loss,
                 "test_acc_best_checkpoint": test_acc,
+                "evaluation_runtime": runtime_metadata(device),
             }
         )
         save_json(summary_path, summary)
@@ -1359,6 +1416,7 @@ def run_experiment(
         "test_acc_best_checkpoint": test_acc,
         "metrics_path": str(metrics_path),
         "best_model_path": str(checkpoint_path),
+        "runtime": runtime_metadata(device),
     }
 
     save_json(summary_path, summary)

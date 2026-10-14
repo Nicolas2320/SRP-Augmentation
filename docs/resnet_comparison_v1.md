@@ -76,12 +76,13 @@ Parameters:
 
 The full design is 56 cells (2 initializations x 4 budgets x 7 methods).
 
-On the ISMLL cluster, submit from the repository root. Use `smoke` for a
-one-epoch validation-only infrastructure check, or `full` for the recipe above:
+On the ISMLL cluster, submit from the repository root. The current runner
+retains this recipe but requires explicit seeds and separates validation-only
+screening from frozen final evaluation:
 
 ```bash
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix full
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke 0 0
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix screen 0 0
 ```
 
 The smoke mode writes below `results/smoke/` and is not comparison evidence.

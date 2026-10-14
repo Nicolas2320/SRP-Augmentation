@@ -1,7 +1,7 @@
 # Recommended Job Matrix for the Third Presentation
 
 This document turns the supervisor feedback in
-[`second_presentation_feedback_summary.md`](../second_presentation_feedback_summary.md)
+[`second_presentation_feedback_summary.md`](second_presentation_feedback_summary.md)
 into a focused, staged cluster plan. It is intended as the handoff document for
 continuing the work in a new chat.
 
@@ -163,10 +163,13 @@ The implemented “different label” condition is not automatically the same as
 “most distant.” Label it accurately. Add a farthest-neighbor mode only if the
 supervisor explicitly requires true distance ordering.
 
-The random baseline is already part of Phase 1. The implemented guided
-conditions require at most 16 additional seed-0 runs: four new strategies at
-three scratch k values plus four at pretrained k=100. Add the truly distant
-condition only after implementation and tests.
+The random baseline is already part of Phase 1. For a strict pairing-only
+ablation, all guided conditions use the same 0.5 mixing probability as random
+CutMix. This requires at most 20 additional seed-0 runs: five guided
+strategies at three scratch k values plus five at pretrained k=100. The Phase-1
+SimCutMix runs use probability 1 and therefore cannot substitute for the
+matched 0.5 less-similar condition. Add the truly distant condition only after
+implementation and tests.
 
 Freeze one rank/mode/sampling configuration from this phase using validation
 evidence. Do not select a different proposed configuration independently for

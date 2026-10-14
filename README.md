@@ -89,7 +89,7 @@ an installation specification, not a fully locked environment. Read
 
 The committed JSON files under `data/splits/` are the authoritative sample
 selections. CIFAR-100 has one fixed validation split (50 images per class),
-k-shot subsets for k=5/10/20/50/100 with seeds 0/1/2, and a maximum k=450
+k-shot subsets for k=5/10/20/50/100/200/300 with seeds 0/1/2, and a maximum k=450
 subset with seed 0. Existing experiments should reuse these files.
 
 To intentionally rebuild the collection:
@@ -124,8 +124,8 @@ checkout.
 On the ISMLL cluster, submit the Linux/Slurm runner from the repository root:
 
 ```bash
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix full
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke 0 0
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix screen 0 0
 ```
 
 Read the [cluster workflow](docs/cluster_workflow.md) before the first run.

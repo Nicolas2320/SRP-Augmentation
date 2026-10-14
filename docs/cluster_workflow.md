@@ -73,30 +73,35 @@ Record the final state with `sacct -j JOB_ID` and inspect the matching log.
 
 ## Submit ResNet50 Runs
 
-The Slurm runner requires four explicit arguments so a full experiment cannot
+The Slurm runner requires six explicit arguments so a full experiment cannot
 be started accidentally:
 
 ```bash
 # One epoch, validation only, output under results/smoke/
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 none smoke 0 0
 
-# Fixed comparison recipe, including final test evaluation
-sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix full
+# Validation-only screening
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix screen 0 0
+
+# Frozen configuration, including final test evaluation
+sbatch scripts/run_resnet_comparison.slurm pretrained 20 cutmix final 1 1
 ```
 
 Accepted values:
 
 - Initialization: `scratch`, `pretrained`.
-- Budget: `20`, `50`, `100`, `450`.
+- Budget: `20`, `50`, `100`, `200`, `300`, `450`.
 - Method: `raw`, `none`, `mixup`, `cutmix`, `augmix`, `simmixup`, `simcutmix`.
-- Mode: `smoke`, `full`.
+- Mode: `smoke`, `screen`, `final`, `evaluate`.
+- Subset seed: `0`, `1`, `2`; k=450 uses subset seed 0 only.
+- Training seed: any non-negative integer.
 
 The runner defaults to Conda environment `srp-augmentation`. Override it only
 when necessary at submission time:
 
 ```bash
 sbatch --export=ALL,CONDA_ENV=another-env \
-  scripts/run_resnet_comparison.slurm pretrained 20 none smoke
+  scripts/run_resnet_comparison.slurm pretrained 20 none smoke 0 0
 ```
 
 Guided methods require their generated neighbor payload before submission.
