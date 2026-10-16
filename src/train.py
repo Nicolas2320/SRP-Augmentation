@@ -974,9 +974,32 @@ def _command_output(command: list[str]) -> str | None:
         return None
 
 
+def _tracked_git_dirty() -> bool | None:
+    """Report staged or unstaged tracked changes, ignoring generated files."""
+    commands = (
+        ["git", "diff", "--quiet", "--ignore-submodules", "--"],
+        ["git", "diff", "--cached", "--quiet", "--ignore-submodules", "--"],
+    )
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode == 1:
+            return True
+        if result.returncode != 0:
+            return None
+    return False
+
+
 def runtime_metadata(device: torch.device) -> dict[str, Any]:
     """Capture the execution environment needed to interpret a new run."""
-    git_status = _command_output(["git", "status", "--short"])
     gpu_name = None
     if device.type == "cuda" and torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(device)
@@ -984,7 +1007,8 @@ def runtime_metadata(device: torch.device) -> dict[str, Any]:
     return {
         "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_commit": _command_output(["git", "rev-parse", "HEAD"]),
-        "git_dirty": bool(git_status),
+        "git_dirty": _tracked_git_dirty(),
+        "git_dirty_scope": "tracked_files_only",
         "python": platform.python_version(),
         "python_executable": sys.executable,
         "platform": platform.platform(),
@@ -1209,6 +1233,8 @@ def run_experiment(
                 f"reviewed artifacts explicitly before retrying:\n{formatted}"
             )
 
+    initial_runtime = runtime_metadata(device)
+
     print("Experiment configuration:")
     for key, value in asdict(config).items():
         print(f"  {key}: {value}")
@@ -1273,7 +1299,7 @@ def run_experiment(
                 "test_evaluated": True,
                 "test_loss_best_checkpoint": test_loss,
                 "test_acc_best_checkpoint": test_acc,
-                "evaluation_runtime": runtime_metadata(device),
+                "evaluation_runtime": initial_runtime,
             }
         )
         save_json(summary_path, summary)
@@ -1416,7 +1442,7 @@ def run_experiment(
         "test_acc_best_checkpoint": test_acc,
         "metrics_path": str(metrics_path),
         "best_model_path": str(checkpoint_path),
-        "runtime": runtime_metadata(device),
+        "runtime": initial_runtime,
     }
 
     save_json(summary_path, summary)
