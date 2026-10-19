@@ -24,6 +24,14 @@
       "num_query_blocks": 4,
       "search_device": "cuda"
     },
+    "class_aware": {
+      "path": "results/experiments/shared/neighbors/cifar100/k20_seed0/neighbors_class_aware_K19.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 19,
+      "query_batch_size": 512,
+      "num_query_blocks": 4,
+      "search_device": "cuda"
+    },
     "different_label": {
       "path": "results/experiments/shared/neighbors/cifar100/k20_seed0/neighbors_different_label_K40.pt",
       "requested_max_neighbors": 40,
