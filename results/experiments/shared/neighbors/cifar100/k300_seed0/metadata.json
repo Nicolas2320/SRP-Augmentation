@@ -23,6 +23,16 @@
       "query_batch_size": 512,
       "num_query_blocks": 59,
       "search_device": "cuda"
+    },
+    "class_aware": {
+      "path": "results/experiments/shared/neighbors/cifar100/k300_seed0/neighbors_class_aware_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 59,
+      "search_device": "cuda"
     }
+  }
+} }
   }
 }
