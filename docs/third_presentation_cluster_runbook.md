@@ -131,6 +131,28 @@ strategies through the ablation runner. All six use CutMix alpha 1 and mixing
 probability 0.5. Select the final guided strategy from validation evidence only
 and record the frozen settings before the confirmation jobs.
 
+The Phase-2 decision was frozen on 2026-10-20 from the validation results in
+commit `205790e`:
+
+```text
+augmentation: simcutmix
+pairing encoder: frozen ImageNet ResNet50
+guided mode: class_agnostic
+neighbor rank window: 21-40
+neighbor rank start: 21
+neighbor count: 20
+pair sampling: uniform
+CutMix alpha: 1.0
+confirmation mix probability: 1.0
+mix warmup: 0 epochs
+```
+
+The 0.5 probability used in the ablation isolates partner selection. The
+confirmation profile remains the predeclared Phase-1 profile at probability
+1.0. See `docs/third_presentation_job_matrix.md` for the validation table,
+selection rationale, and disclosure about the historical pretrained k=100
+random condition.
+
 ## 6. Confirmation Seeds
 
 For k below 450, use `(subset_seed, train_seed)` pairs `(0,0)`, `(1,1)`, and
