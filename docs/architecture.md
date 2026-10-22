@@ -39,6 +39,8 @@ flowchart LR
 | `src/train.py` | Unified CLI, validation, data loaders, training, evaluation, and record writing |
 | `src/augmentations/` | MixUp, CutMix, AugMix, SimMixUp, and SimCutMix implementations |
 | `src/data/make_splits.py` | Deterministic validation and k-shot split generation |
+| `src/data/tiny_imagenet.py` | Canonical Tiny ImageNet class mapping and train/labeled-val loading |
+| `src/data/prepare_tiny_imagenet.py` | Safe extraction, partition verification, and weight caching |
 | `src/data/indexed_dataset.py` | Original-index preservation and guided partner sampling |
 | `src/models/resnet.py` | Standard torchvision ResNet50 at 224x224, random or ImageNet initialization |
 | `src/models/vit.py` | Scratch-trained CIFAR ViT at 32x32 |
@@ -50,6 +52,7 @@ flowchart LR
 | `src/experiments/audit_artifacts.py` | Read-only audit of records and local `.pt` references |
 | `src/graphs/plot_graphs.py` | Recipe-aware comparison plots and per-group `runs.csv` files |
 | `scripts/run_resnet_comparison.ps1` | Fixed ResNet50 comparison command builder/runner |
+| `scripts/run_tiny_imagenet.slurm` | Fixed Tiny ImageNet cluster runner and leakage policy |
 | `tests/` | Unit and small integration tests; no full dataset training |
 
 `src/proposal/` is the implementation area for the proposed method; it is not
@@ -88,6 +91,13 @@ Preprocessing depends on the classifier:
   is passed.
 - ViT uses 32x32 CIFAR inputs, 4x4 patches, six transformer blocks, 256 hidden
   dimensions, and eight attention heads. It is trained from scratch.
+- Tiny ImageNet currently supports ResNet50 only. Spatial augmentation runs at
+  native 64x64 resolution with padding 8 before resizing to 224x224.
+
+Tiny ImageNet reserves 50 images per class from the official training
+partition for validation, leaving a balanced k_max=450 pool. Its labeled
+official validation partition is used as the final test set. The unlabeled
+official test partition is never loaded.
 
 Some imported scratch-group ResNet50 records were produced by an earlier
 CIFAR-adapted 32x32 architecture. Their summaries carry

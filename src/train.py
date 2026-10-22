@@ -3,12 +3,12 @@ Unified training script for SRP-Augmentation.
 
 Purpose
 -------
-This file is the official experiment entry point for CIFAR baseline runs.
+This file is the official experiment entry point for CIFAR and Tiny ImageNet runs.
 It replaces the old prototype direction of `train_baseline.py`.
 
 Current v1 support
 ------------------
-- Dataset: CIFAR-10, CIFAR-100
+- Dataset: CIFAR-10, CIFAR-100, Tiny ImageNet
 - Models: ResNet50, ViT
 - Augmentation: raw (no crop/flip), none (crop+flip only), MixUp, CutMix, AugMix, SimMixUp, SimCutMix
 - k-shot split loading from generated split files, including the full post-validation pool
@@ -69,6 +69,7 @@ from augmentations.similarity_guided import (
     simmixup_criterion,
 )
 from data.indexed_dataset import GuidedPairDataset
+from data.tiny_imagenet import TinyImageNet
 
 
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
@@ -81,7 +82,7 @@ IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 RESNET50_INPUT_SIZE = 224
 
-DatasetName = Literal["cifar10", "cifar100"]
+DatasetName = Literal["cifar10", "cifar100", "tinyimagenet"]
 ModelName = Literal["resnet50", "vit"]
 AugmentationName = Literal["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
 
@@ -265,6 +266,8 @@ def get_num_classes(dataset: str) -> int:
         return 10
     if dataset == "cifar100":
         return 100
+    if dataset == "tinyimagenet":
+        return 200
     raise ValueError(f"Unsupported dataset: {dataset}")
 
 
@@ -273,7 +276,34 @@ def get_dataset_class(dataset: str):
         return CIFAR10
     if dataset == "cifar100":
         return CIFAR100
+    if dataset == "tinyimagenet":
+        return TinyImageNet
     raise ValueError(f"Unsupported dataset: {dataset}")
+
+
+def build_dataset(
+    dataset: str,
+    data_root: str,
+    partition: Literal["train", "test"],
+    transform: Any,
+):
+    """Build a dataset partition with consistent internal semantics.
+
+    Tiny ImageNet reserves validation examples from its official training
+    partition, so ``partition='train'`` always returns that official training
+    partition. Its labeled official validation partition is the final test set.
+    The unlabeled official test partition is never loaded.
+    """
+    if dataset == "tinyimagenet":
+        split = "train" if partition == "train" else "val"
+        return TinyImageNet(root=data_root, split=split, transform=transform)
+    DatasetClass = get_dataset_class(dataset)
+    return DatasetClass(
+        root=data_root,
+        train=partition == "train",
+        download=True,
+        transform=transform,
+    )
 
 
 def get_dataset_stats(dataset: str) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
@@ -281,11 +311,13 @@ def get_dataset_stats(dataset: str) -> tuple[tuple[float, float, float], tuple[f
         return CIFAR10_MEAN, CIFAR10_STD
     if dataset == "cifar100":
         return CIFAR100_MEAN, CIFAR100_STD
+    if dataset == "tinyimagenet":
+        return IMAGENET_MEAN, IMAGENET_STD
     raise ValueError(f"Unsupported dataset: {dataset}")
 
 def get_split_paths(dataset: str, k: int, subset_seed: int, split_root: str) -> tuple[Path, Path]:
     """Return train subset and validation split paths."""
-    if dataset not in {"cifar10", "cifar100"}:
+    if dataset not in {"cifar10", "cifar100", "tinyimagenet"}:
         raise ValueError(f"Unsupported dataset: {dataset}")
 
     split_dir = Path(split_root) / dataset
@@ -306,7 +338,7 @@ def get_transforms(
     ResNet50 uses the same 224x224 pipeline and ImageNet normalization for
     both random and ImageNet initialization, so the comparison changes
     initialization without changing preprocessing. All spatial
-    augmentation (crop/flip/AugMix) still runs on the native 32x32 image
+    augmentation (crop/flip/AugMix) still runs on the native image
     first; the resize is appended last since it commutes with normalization.
 
     Augmentation tiers, from weakest to strongest:
@@ -334,8 +366,10 @@ def get_transforms(
         ]
     )
 
+    native_size = 64 if dataset == "tinyimagenet" else 32
+    crop_padding = 8 if dataset == "tinyimagenet" else 4
     spatial_augmentation = [
-        transforms.RandomCrop(32, padding=4),
+        transforms.RandomCrop(native_size, padding=crop_padding),
         transforms.RandomHorizontalFlip(),
     ]
 
@@ -539,26 +573,24 @@ def build_dataloaders(
         model=config.model,
     )
 
-    DatasetClass = get_dataset_class(config.dataset)
-
-    train_full = DatasetClass(
-        root=config.data_root,
-        train=True,
-        download=True, # False on cluster
+    train_full = build_dataset(
+        dataset=config.dataset,
+        data_root=config.data_root,
+        partition="train",
         transform=train_transform,
     )
 
-    val_full = DatasetClass(
-        root=config.data_root,
-        train=True,
-        download=True, # False on cluster
+    val_full = build_dataset(
+        dataset=config.dataset,
+        data_root=config.data_root,
+        partition="train",
         transform=eval_transform,
     )
 
-    test_dataset = DatasetClass(
-        root=config.data_root,
-        train=False,
-        download=True, # False on cluster
+    test_dataset = build_dataset(
+        dataset=config.dataset,
+        data_root=config.data_root,
+        partition="test",
         transform=eval_transform,
     )
 
@@ -1185,11 +1217,10 @@ def build_clean_train_loader(
         seed=config.train_seed,
         model=config.model,
     )
-    DatasetClass = get_dataset_class(config.dataset)
-    clean_train_full = DatasetClass(
-        root=config.data_root,
-        train=True,
-        download=True,  # False on cluster
+    clean_train_full = build_dataset(
+        dataset=config.dataset,
+        data_root=config.data_root,
+        partition="train",
         transform=eval_transform,
     )
     clean_train_dataset = Subset(clean_train_full, train_indices)
@@ -1467,9 +1498,14 @@ def run_experiment(
 
 
 def parse_args() -> tuple[ExperimentConfig, bool, bool]:
-    parser = argparse.ArgumentParser(description="Unified CIFAR SRP training script")
+    parser = argparse.ArgumentParser(description="Unified SRP image-classification training script")
 
-    parser.add_argument("--dataset", type=str, default="cifar100", choices=["cifar10", "cifar100"])
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="cifar100",
+        choices=["cifar10", "cifar100", "tinyimagenet"],
+    )
     parser.add_argument("--model", type=str, default="resnet50", choices=["resnet50", "vit"])
     parser.add_argument(
         "--pretrained", action=argparse.BooleanOptionalAction, default=False,
@@ -1480,8 +1516,8 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
         type=int,
         default=20,
         help=(
-            "Labeled images per class. CIFAR-100 k=max is 450 because "
-            "50 images per class remain reserved for validation."
+            "Labeled images per class. CIFAR-100 and Tiny ImageNet k=max are "
+            "450 because 50 images per class remain reserved for validation."
         ),
     )
     parser.add_argument("--subset-seed", type=int, default=0)
@@ -1676,6 +1712,9 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
     )
 
     args = parser.parse_args()
+
+    if args.dataset == "tinyimagenet" and args.model != "resnet50":
+        parser.error("Tiny ImageNet currently supports only --model resnet50")
 
     if args.k < 1:
         parser.error("--k must be a positive integer")

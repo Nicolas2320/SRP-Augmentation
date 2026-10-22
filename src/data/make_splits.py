@@ -7,6 +7,11 @@ from collections import defaultdict
 import numpy as np
 from torchvision.datasets import CIFAR10, CIFAR100
 
+try:
+    from .tiny_imagenet import TinyImageNet
+except ImportError:  # Support `python src/data/make_splits.py`.
+    from tiny_imagenet import TinyImageNet
+
 
 def group_indices_by_class(targets):
     class_to_indices = defaultdict(list)
@@ -84,13 +89,19 @@ def save_json(path, data):
         json.dump(data, f, indent=2)
 
 
+def load_training_dataset(dataset_name: str, dataset_class, root: Path):
+    if dataset_name == "tinyimagenet":
+        return dataset_class(root=root, split="train")
+    return dataset_class(root=root, train=True, download=True)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Generate deterministic CIFAR split JSON files.")
+    parser = argparse.ArgumentParser(description="Generate deterministic balanced split JSON files.")
     parser.add_argument(
         "--dataset",
         action="append",
-        choices=["cifar10", "cifar100"],
-        help="Dataset to generate. Repeat for both; defaults to both datasets.",
+        choices=["cifar10", "cifar100", "tinyimagenet"],
+        help="Dataset to generate. Repeat as needed; defaults to the two CIFAR datasets.",
     )
     args = parser.parse_args()
 
@@ -108,21 +119,22 @@ def main():
             "val_per_class": 50,
             "k_values": [5, 10, 20, 50, 100, 200, 300],
         },
+        "tinyimagenet": {
+            "class": TinyImageNet,
+            "val_per_class": 50,
+            "k_values": [20, 100],
+        },
     }
 
     validation_seed = 123
     subset_seeds = [0, 1, 2]
 
-    selected_datasets = args.dataset or list(datasets)
+    selected_datasets = args.dataset or ["cifar10", "cifar100"]
     for dataset_name in selected_datasets:
         cfg = datasets[dataset_name]
         print(f"Processing {dataset_name}...")
 
-        dataset = cfg["class"](
-            root=root,
-            train=True,
-            download=True,
-        )
+        dataset = load_training_dataset(dataset_name, cfg["class"], root)
 
         targets = dataset.targets
 
@@ -141,6 +153,15 @@ def main():
             "val_indices": val_indices,
             "train_pool_indices": train_pool_indices,
         }
+        if dataset_name == "tinyimagenet":
+            split_info.update(
+                {
+                    "class_mapping_source": "wnids.txt",
+                    "validation_source": "reserved_from_official_train",
+                    "test_source": "official_labeled_val",
+                    "official_unlabeled_test_used": False,
+                }
+            )
 
         save_json(
             output_root / dataset_name / "fixed_validation_split.json",

@@ -1,4 +1,4 @@
-"""Compute feature embeddings for a k-shot CIFAR training subset only.
+"""Compute feature embeddings for a k-shot training subset only.
 
 This script intentionally reads only the k-shot training split JSON. It checks
 that none of those indices overlap with the fixed validation split, and it uses
@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,17 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import CIFAR10, CIFAR100
 from torchvision.models import ResNet18_Weights, ResNet50_Weights, resnet18, resnet50
 
+SRC_ROOT = Path(__file__).resolve().parents[1]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from data.tiny_imagenet import TinyImageNet
+
 
 DATASET_CLASSES = {
     "cifar10": CIFAR10,
     "cifar100": CIFAR100,
+    "tinyimagenet": TinyImageNet,
 }
 
 ENCODER_CHOICES = ["resnet18_imagenet", "resnet50_imagenet"]
@@ -73,6 +81,21 @@ def sha256_ints(values: list[int]) -> str:
 
 def output_dir(output_root: Path, dataset: str, k: int, subset_seed: int) -> Path:
     return output_root / dataset / f"k{k}_seed{subset_seed}"
+
+
+def build_training_dataset(dataset: str, data_root: Path, transform: Any) -> Dataset:
+    if dataset == "tinyimagenet":
+        return TinyImageNet(root=data_root, split="train", transform=transform)
+    return DATASET_CLASSES[dataset](
+        root=data_root,
+        train=True,
+        download=True,
+        transform=transform,
+    )
+
+
+def source_partition_name(dataset: str) -> str:
+    return "tiny_imagenet_train" if dataset == "tinyimagenet" else "torchvision_train_true"
 
 
 def build_encoder(name: str, device: torch.device) -> tuple[nn.Module, Any, int]:
@@ -131,7 +154,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Compute encoder embeddings for the k-shot training subset only."
     )
-    parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
+    parser.add_argument(
+        "--dataset", choices=["cifar10", "cifar100", "tinyimagenet"], required=True
+    )
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
@@ -166,13 +191,7 @@ def main() -> None:
 
     device = get_device(args.device)
     encoder, transform, embedding_dim = build_encoder(args.encoder, device)
-    dataset_class = DATASET_CLASSES[args.dataset]
-    train_dataset = dataset_class(
-        root=data_root,
-        train=True,
-        download=True,
-        transform=transform,
-    )
+    train_dataset = build_training_dataset(args.dataset, data_root, transform)
     subset_dataset = IndexedSubsetDataset(train_dataset, train_indices)
     dataloader = DataLoader(
         subset_dataset,
@@ -211,7 +230,7 @@ def main() -> None:
         "embedding_path": str(embedding_path),
         "num_train": len(train_indices),
         "embedding_dim": embedding_dim,
-        "source_dataset_partition": "torchvision_train_true",
+        "source_dataset_partition": source_partition_name(args.dataset),
         "uses_validation_samples": False,
         "uses_test_samples": False,
         "validation_overlap_count": 0,

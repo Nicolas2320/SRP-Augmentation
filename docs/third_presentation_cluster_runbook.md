@@ -180,3 +180,26 @@ sbatch scripts/run_resnet_comparison.slurm scratch 100 simcutmix evaluate 0 0
 
 Do not use `evaluate` until the configuration is frozen. Tiny ImageNet and
 curriculum work begin only after the CIFAR-100 confirmation gate passes.
+
+## 7. Tiny ImageNet Engineering Gate
+
+The full data policy, preparation commands, fixed recipe, and disclosure are in
+`docs/tiny_imagenet_protocol.md`. Prepare and verify the dataset on the login
+node, generate and commit the seven deterministic split files, then pull them
+on the cluster.
+
+Build seed-0 k=20 support first:
+
+```bash
+sbatch scripts/build_guided_support.slurm tinyimagenet 20 0 class_agnostic
+```
+
+After neighbor inspection passes, submit exactly these two smoke jobs:
+
+```bash
+sbatch scripts/run_tiny_imagenet.slurm pretrained 20 none smoke 0 0
+sbatch scripts/run_tiny_imagenet.slurm scratch 20 simcutmix smoke 0 0
+```
+
+Do not submit the 18-cell screening matrix until both smoke summaries have the
+expected dataset sizes and `test_evaluated=false`.

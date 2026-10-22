@@ -258,8 +258,10 @@ Keep this extension separate from the primary CutMix-family claim.
 
 ## Phase 4 — Tiny ImageNet Generalization
 
-Tiny ImageNet is a must-have target from the feedback, but it is currently an
-engineering task, not a runnable matrix. Complete this gate first:
+Tiny ImageNet is a must-have target from the feedback. The repository now has
+an implemented protocol and runnable path, but it remains behind the dataset,
+split-audit, support-artifact, and GPU-smoke gates described in
+`docs/tiny_imagenet_protocol.md`:
 
 1. Add and test dataset loading and canonical class mapping.
 2. Define the train/validation/test policy without test leakage.
@@ -279,8 +281,9 @@ engineering task, not a runnable matrix. Complete this gate first:
 | Methods | `none`, `cutmix`, frozen `simcutmix` |
 | Seed | `(0,0)` |
 
-`k_max` must be defined after the validation policy is fixed; do not assume all
-500 training images per class remain available.
+The fixed policy reserves 50 of the 500 official training images per class for
+validation, so `k_max=450`. The labeled official validation partition is the
+final test set; the unlabeled official test partition is unused.
 
 This screening matrix has 18 cells. If it runs reliably, repeat at least k=20
 and `k_max` with seeds `(1,1)` and `(2,2)`, adding at most 24 jobs. If resources

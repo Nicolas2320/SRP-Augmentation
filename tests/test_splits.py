@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from src.data.audit_splits import audit_fixed_split
 from src.data.make_splits import create_kshot_from_pool, max_k_per_class
 
 
@@ -42,6 +43,25 @@ class SplitGenerationTests(unittest.TestCase):
         larger = set(create_kshot_from_pool(self.targets, self.train_pool_indices, 3, 7))
 
         self.assertTrue(smaller.issubset(larger))
+
+    def test_fixed_split_audit_requires_exact_partition_and_balance(self):
+        fixed = {
+            "dataset": "synthetic",
+            "val_per_class": 2,
+            "num_val": 6,
+            "num_train_pool": 12,
+            "val_indices": sorted(self.val_indices),
+            "train_pool_indices": self.train_pool_indices,
+        }
+
+        train_pool, validation = audit_fixed_split(fixed, self.targets, "synthetic")
+
+        self.assertEqual(train_pool, set(self.train_pool_indices))
+        self.assertEqual(validation, self.val_indices)
+
+        fixed["train_pool_indices"] = self.train_pool_indices[:-1]
+        with self.assertRaisesRegex(AssertionError, "partition"):
+            audit_fixed_split(fixed, self.targets, "synthetic")
 
 
 if __name__ == "__main__":

@@ -80,8 +80,15 @@ def validate_embeddings(
 
     if metadata.get("uses_test_samples") is not False:
         raise AssertionError("metadata does not explicitly record uses_test_samples=false")
-    if metadata.get("source_dataset_partition") != "torchvision_train_true":
-        raise AssertionError("metadata does not record torchvision train partition as the source")
+    expected_partition = (
+        "tiny_imagenet_train"
+        if metadata.get("dataset") == "tinyimagenet"
+        else "torchvision_train_true"
+    )
+    if metadata.get("source_dataset_partition") != expected_partition:
+        raise AssertionError(
+            f"metadata source partition is not {expected_partition!r}"
+        )
     messages.append("test exclusion metadata OK")
 
     if metadata.get("split_hash") != split_hash:
@@ -128,7 +135,9 @@ def validate_neighbors(neighbor_payload: dict[str, Any], mode: str) -> list[str]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate embedding and neighbor artifacts.")
-    parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
+    parser.add_argument(
+        "--dataset", choices=["cifar10", "cifar100", "tinyimagenet"], required=True
+    )
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)

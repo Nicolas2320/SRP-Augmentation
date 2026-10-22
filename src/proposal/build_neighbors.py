@@ -229,7 +229,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build filtered nearest-neighbor files from saved embeddings."
     )
-    parser.add_argument("--dataset", choices=["cifar10", "cifar100"], required=True)
+    parser.add_argument(
+        "--dataset", choices=["cifar10", "cifar100", "tinyimagenet"], required=True
+    )
     parser.add_argument("--k", type=int, required=True)
     parser.add_argument("--subset-seed", type=int, required=True)
     parser.add_argument("--encoder", choices=ENCODER_CHOICES, required=True)
