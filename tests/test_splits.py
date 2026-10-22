@@ -37,6 +37,12 @@ class SplitGenerationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             max_k_per_class(self.targets, [])
 
+    def test_same_seed_produces_nested_k_shot_subsets(self):
+        smaller = set(create_kshot_from_pool(self.targets, self.train_pool_indices, 2, 7))
+        larger = set(create_kshot_from_pool(self.targets, self.train_pool_indices, 3, 7))
+
+        self.assertTrue(smaller.issubset(larger))
+
 
 if __name__ == "__main__":
     unittest.main()

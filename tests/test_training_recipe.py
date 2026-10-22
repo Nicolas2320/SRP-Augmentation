@@ -1,6 +1,7 @@
 import sys
+import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 import torch
@@ -13,10 +14,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from src.train import (
     IMAGENET_MEAN,
+    _tracked_git_dirty,
     ExperimentConfig,
     build_cutmix,
     build_model,
     parse_args,
+    run_experiment,
     build_lr_scheduler,
     build_optimizer,
     experiment_config_id,
@@ -61,6 +64,23 @@ def training_config(**overrides):
 
 
 class TrainingRecipeTests(unittest.TestCase):
+    def test_git_dirty_check_ignores_untracked_files(self):
+        clean = Mock(returncode=0)
+        with patch("src.train.subprocess.run", side_effect=[clean, clean]) as run:
+            self.assertFalse(_tracked_git_dirty())
+
+        self.assertEqual(
+            [entry.args[0] for entry in run.call_args_list],
+            [
+                ["git", "diff", "--quiet", "--ignore-submodules", "--"],
+                ["git", "diff", "--cached", "--quiet", "--ignore-submodules", "--"],
+            ],
+        )
+
+    def test_git_dirty_check_detects_tracked_changes(self):
+        with patch("src.train.subprocess.run", return_value=Mock(returncode=1)):
+            self.assertTrue(_tracked_git_dirty())
+
     def test_initialization_default_and_explicit_cli(self):
         for flags, expected in (([], False), (["--pretrained"], True), (["--no-pretrained"], False)):
             with self.subTest(flags=flags), patch.object(sys, "argv", ["train.py"] + flags):
@@ -190,6 +210,16 @@ class TrainingRecipeTests(unittest.TestCase):
             experiment_config_id(original),
             experiment_config_id(different_lr),
         )
+
+    def test_existing_run_is_never_silently_overwritten(self):
+        with tempfile.TemporaryDirectory() as temp:
+            config = training_config(output_root=temp)
+            output_dir = experiment_output_dir(config)
+            output_dir.mkdir(parents=True)
+            (output_dir / "metrics.csv").write_text("epoch,val_acc\n1,0.5\n")
+
+            with self.assertRaisesRegex(FileExistsError, "Refusing to overwrite"):
+                run_experiment(config, evaluate_test=False)
 
     def test_neighbor_rank_log_omits_per_rank_statistics(self):
         class GuidedDataset:

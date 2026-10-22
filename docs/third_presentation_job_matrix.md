@@ -1,7 +1,7 @@
 # Recommended Job Matrix for the Third Presentation
 
 This document turns the supervisor feedback in
-[`second_presentation_feedback_summary.md`](../second_presentation_feedback_summary.md)
+[`second_presentation_feedback_summary.md`](second_presentation_feedback_summary.md)
 into a focused, staged cluster plan. It is intended as the handoff document for
 continuing the work in a new chat.
 
@@ -163,14 +163,59 @@ The implemented “different label” condition is not automatically the same as
 “most distant.” Label it accurately. Add a farthest-neighbor mode only if the
 supervisor explicitly requires true distance ordering.
 
-The random baseline is already part of Phase 1. The implemented guided
-conditions require at most 16 additional seed-0 runs: four new strategies at
-three scratch k values plus four at pretrained k=100. Add the truly distant
-condition only after implementation and tests.
+The random baseline is already part of Phase 1. For a strict pairing-only
+ablation, all guided conditions use the same 0.5 mixing probability as random
+CutMix. This requires at most 20 additional seed-0 runs: five guided
+strategies at three scratch k values plus five at pretrained k=100. The Phase-1
+SimCutMix runs use probability 1 and therefore cannot substitute for the
+matched 0.5 less-similar condition. Add the truly distant condition only after
+implementation and tests.
 
 Freeze one rank/mode/sampling configuration from this phase using validation
 evidence. Do not select a different proposed configuration independently for
 every seed.
+
+### Frozen Phase-2 decision (2026-10-20)
+
+The 20 guided runs in commit `205790e` completed successfully. The table below
+uses best validation accuracy only; no test result was used for this choice.
+All guided conditions used CutMix alpha 1 and mixing probability 0.5 during
+this strict pairing-only ablation.
+
+| Initialization | k | Random | Same class | Most similar | Middle | Less similar | Different label |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Scratch | 20 | 15.54 | 16.70 | 17.56 | **17.68** | 16.64 | 16.96 |
+| Scratch | 100 | 52.98 | 53.30 | 54.06 | 53.68 | **54.90** | 54.32 |
+| Scratch | 300 | **74.86** | 73.32 | 74.48 | 73.78 | 74.42 | 74.06 |
+| Pretrained | 100 | 78.74 | 76.92 | 78.80 | 78.96 | **79.18** | 78.98 |
+
+Freeze the proposed pairing strategy as class-agnostic neighbors ranked
+21--40, sampling uniformly from that 20-neighbor window. It wins two of the
+four representative settings, remains within 0.44 percentage points of random
+at scratch k=300, and has the largest mean validation improvement over random
+across the four settings. The scratch k=20 exception and the single-seed nature
+of this selection must remain visible when reporting the result.
+
+The full frozen SimCutMix confirmation profile is:
+
+| Setting | Frozen value |
+|---|---|
+| Pairing encoder | ImageNet-pretrained ResNet50, frozen |
+| Neighbor mode | `class_agnostic` |
+| Neighbor rank window | 21--40 |
+| `neighbor_rank_start` | 21 |
+| `neighbor_k` | 20 |
+| Pair sampling | `uniform` |
+| CutMix alpha | 1.0 |
+| Confirmation mixing probability | 1.0 |
+| Mix warmup | 0 epochs |
+
+The 0.5 mixing probability above belongs only to the controlled Phase-2
+pairing ablation. Confirmation retains the predeclared Phase-1 SimCutMix
+profile with probability 1.0, allowing the compatible seed-0 Phase-1 cells to
+be reused. The reused pretrained k=100 random condition had historically
+evaluated the test set; only its validation accuracy was consulted here. This
+prior exposure should be disclosed even though it did not drive the selection.
 
 ## Phase 3 — Three-Seed Confirmatory CIFAR-100 Matrix
 

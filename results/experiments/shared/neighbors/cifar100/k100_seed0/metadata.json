@@ -1,0 +1,44 @@
+{
+  "dataset": "cifar100",
+  "k": 100,
+  "subset_seed": 0,
+  "encoder": "resnet50_imagenet",
+  "split_hash": "b436b45c3a34df98cea489c39ac1c52e4eeddfebc679bf4bdbb582c09418fa43",
+  "validation_split_hash": "3d809f2a6cce21966ac2b1cd4f6d8826d06bb7f817893da24d91cf1c3ce0a9ef",
+  "train_indices_hash": "6cb7758f5791e9aa2cfa1a5108e22b3a2cb7fe3c94ce165fb951f8d071349d6a",
+  "split_path": "data/splits/cifar100/k100_seed0.json",
+  "validation_split_path": "data/splits/cifar100/fixed_validation_split.json",
+  "embedding_path": "results/experiments/shared/neighbors/cifar100/k100_seed0/embeddings_resnet50_imagenet.pt",
+  "num_train": 10000,
+  "embedding_dim": 2048,
+  "source_dataset_partition": "torchvision_train_true",
+  "uses_validation_samples": false,
+  "uses_test_samples": false,
+  "validation_overlap_count": 0,
+  "neighbors": {
+    "class_agnostic": {
+      "path": "results/experiments/shared/neighbors/cifar100/k100_seed0/neighbors_class_agnostic_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 20,
+      "search_device": "cuda"
+    },
+    "class_aware": {
+      "path": "results/experiments/shared/neighbors/cifar100/k100_seed0/neighbors_class_aware_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 20,
+      "search_device": "cuda"
+    },
+    "different_label": {
+      "path": "results/experiments/shared/neighbors/cifar100/k100_seed0/neighbors_different_label_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 20,
+      "search_device": "cuda"
+    }
+  }
+}

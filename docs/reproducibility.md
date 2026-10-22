@@ -59,8 +59,12 @@ git rev-parse HEAD
 python -m pip freeze
 ```
 
-Store this information with the experiment notes until summary-level
-environment capture is implemented.
+Historical summaries that predate automatic capture still require this
+information in the experiment notes. New summaries capture the environment
+automatically at run start. The
+`runtime.git_dirty` field checks only staged or unstaged changes to tracked
+files; generated outputs and other untracked files do not make it true. Its
+scope is recorded as `runtime.git_dirty_scope=tracked_files_only`.
 
 ## Preflight Verification
 

@@ -1,3 +1,4 @@
+import argparse
 import json
 import random
 from pathlib import Path
@@ -84,6 +85,15 @@ def save_json(path, data):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Generate deterministic CIFAR split JSON files.")
+    parser.add_argument(
+        "--dataset",
+        action="append",
+        choices=["cifar10", "cifar100"],
+        help="Dataset to generate. Repeat for both; defaults to both datasets.",
+    )
+    args = parser.parse_args()
+
     root = Path("data/raw")
     output_root = Path("data/splits")
 
@@ -96,14 +106,16 @@ def main():
         "cifar100": {
             "class": CIFAR100,
             "val_per_class": 50,
-            "k_values": [5, 10, 20, 50, 100],
+            "k_values": [5, 10, 20, 50, 100, 200, 300],
         },
     }
 
     validation_seed = 123
     subset_seeds = [0, 1, 2]
 
-    for dataset_name, cfg in datasets.items():
+    selected_datasets = args.dataset or list(datasets)
+    for dataset_name in selected_datasets:
+        cfg = datasets[dataset_name]
         print(f"Processing {dataset_name}...")
 
         dataset = cfg["class"](
