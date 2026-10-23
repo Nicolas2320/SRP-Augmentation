@@ -1,0 +1,28 @@
+{
+  "dataset": "tinyimagenet",
+  "k": 100,
+  "subset_seed": 0,
+  "encoder": "resnet50_imagenet",
+  "split_hash": "2eb074100a2647ae48628a9edb0d1a08d9f19fb29958831dbdcc07e7f9dafbbc",
+  "validation_split_hash": "0058670f3e18d6715f00a17bb3235fdd5c950001bb1ab29bc2ae97d22ccb889d",
+  "train_indices_hash": "b4254cccd9ffe9e4356467dea47b8358c9fa4b054e391c6fe299bae7e90000dd",
+  "split_path": "data/splits/tinyimagenet/k100_seed0.json",
+  "validation_split_path": "data/splits/tinyimagenet/fixed_validation_split.json",
+  "embedding_path": "results/experiments/shared/neighbors/tinyimagenet/k100_seed0/embeddings_resnet50_imagenet.pt",
+  "num_train": 20000,
+  "embedding_dim": 2048,
+  "source_dataset_partition": "tiny_imagenet_train",
+  "uses_validation_samples": false,
+  "uses_test_samples": false,
+  "validation_overlap_count": 0,
+  "neighbors": {
+    "class_agnostic": {
+      "path": "results/experiments/shared/neighbors/tinyimagenet/k100_seed0/neighbors_class_agnostic_K40.pt",
+      "requested_max_neighbors": 40,
+      "num_neighbors": 40,
+      "query_batch_size": 512,
+      "num_query_blocks": 40,
+      "search_device": "cuda"
+    }
+  }
+}
