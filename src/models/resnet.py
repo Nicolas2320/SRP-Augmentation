@@ -15,6 +15,7 @@ def build_resnet50_cifar(num_classes: int = 100, pretrained: bool = False) -> nn
     This works for:
     - CIFAR-10 with num_classes=10
     - CIFAR-100 with num_classes=100
+    - Tiny ImageNet with num_classes=200
     """
 
     model = resnet50(weights=ResNet50_Weights.DEFAULT if pretrained else None)

@@ -26,6 +26,7 @@ from src.train import (
     experiment_output_dir,
     format_neighbor_rank_summary,
     get_transforms,
+    get_num_classes,
 )
 
 
@@ -134,6 +135,24 @@ class TrainingRecipeTests(unittest.TestCase):
                 self.assertEqual(eval_names, ["ToTensor", "Normalize", "Resize"])
                 self.assertEqual(eval_transform.transforms[-1].size, 224)
                 self.assertEqual(tuple(eval_transform.transforms[1].mean), IMAGENET_MEAN)
+
+    def test_tiny_imagenet_uses_64_pixel_crop_and_200_classes(self):
+        train_transform, eval_transform = get_transforms(
+            "tinyimagenet", augmentation="simcutmix", seed=0, model="resnet50"
+        )
+
+        self.assertEqual(get_num_classes("tinyimagenet"), 200)
+        self.assertEqual(train_transform.transforms[0].size, (64, 64))
+        self.assertEqual(train_transform.transforms[0].padding, 8)
+        self.assertEqual(eval_transform.transforms[-1].size, 224)
+
+    def test_tiny_imagenet_cli_rejects_vit(self):
+        with patch.object(
+            sys,
+            "argv",
+            ["train.py", "--dataset", "tinyimagenet", "--model", "vit"],
+        ), self.assertRaises(SystemExit):
+            parse_args()
 
     def test_raw_pipeline_has_no_crop_or_flip(self):
         for model in ("vit", "resnet50"):

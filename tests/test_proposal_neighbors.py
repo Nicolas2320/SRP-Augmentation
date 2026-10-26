@@ -192,6 +192,45 @@ class ProposalNeighborTests(unittest.TestCase):
             )
             self.assertTrue(any("embeddings shape OK" in message for message in messages))
 
+    def test_tiny_imagenet_embedding_validation_accepts_official_train_source(self):
+        train_split = {
+            "dataset": "tinyimagenet",
+            "k": 3,
+            "subset_seed": 0,
+            "num_train": 6,
+            "train_indices": self.indices.tolist(),
+        }
+        val_split = {
+            "dataset": "tinyimagenet",
+            "num_val": 2,
+            "val_indices": [99, 100],
+        }
+        metadata = {
+            "dataset": "tinyimagenet",
+            "k": 3,
+            "subset_seed": 0,
+            "encoder": "synthetic_encoder",
+            "split_hash": "tiny-split-hash",
+            "num_train": 6,
+            "embedding_dim": 3,
+            "source_dataset_partition": "tiny_imagenet_train",
+            "uses_test_samples": False,
+        }
+        embedding_payload = {
+            "embeddings": self.embeddings,
+            "original_indices": self.indices,
+        }
+
+        messages = validate_embeddings(
+            embedding_payload,
+            metadata,
+            train_split,
+            val_split,
+            "tiny-split-hash",
+        )
+
+        self.assertIn("test exclusion metadata OK", messages)
+
     def test_embedding_validation_rejects_validation_overlap(self):
         train_split = {
             "num_train": 6,

@@ -16,8 +16,9 @@ Usage:
   sbatch scripts/build_guided_support.slurm DATASET K SUBSET_SEED MODE
 
 Arguments:
-  DATASET      cifar100
-  K            20 | 50 | 100 | 200 | 300 | 450
+  DATASET      cifar100 | tinyimagenet
+  K            CIFAR-100: 20 | 50 | 100 | 200 | 300 | 450
+               Tiny ImageNet: 20 | 100 | 450
   SUBSET_SEED  0 | 1 | 2 (k=450 requires 0)
   MODE         class_agnostic | class_aware | different_label
 
@@ -37,8 +38,15 @@ k="$2"
 subset_seed="$3"
 neighbor_mode="$4"
 
-[[ "$dataset" == "cifar100" ]] || { echo "Invalid dataset: $dataset" >&2; exit 2; }
-case "$k" in 20|50|100|200|300|450) ;; *) echo "Invalid k: $k" >&2; exit 2 ;; esac
+case "$dataset" in
+    cifar100)
+        case "$k" in 20|50|100|200|300|450) ;; *) echo "Invalid CIFAR-100 k: $k" >&2; exit 2 ;; esac
+        ;;
+    tinyimagenet)
+        case "$k" in 20|100|450) ;; *) echo "Invalid Tiny ImageNet k: $k" >&2; exit 2 ;; esac
+        ;;
+    *) echo "Invalid dataset: $dataset" >&2; exit 2 ;;
+esac
 case "$subset_seed" in 0|1|2) ;; *) echo "Invalid subset seed: $subset_seed" >&2; exit 2 ;; esac
 case "$neighbor_mode" in
     class_agnostic|class_aware|different_label) ;;
@@ -58,6 +66,10 @@ cd "$repo_root"
 
 split_path="data/splits/${dataset}/k${k}_seed${subset_seed}.json"
 [[ -f "$split_path" ]] || { echo "Missing committed split: $split_path" >&2; exit 2; }
+if [[ "$dataset" == "tinyimagenet" && ! -f "data/raw/tiny-imagenet-200/wnids.txt" ]]; then
+    echo "Missing cached Tiny ImageNet dataset below data/raw/tiny-imagenet-200." >&2
+    exit 2
+fi
 
 conda_sh="${CONDA_SH:-$HOME/miniconda3/etc/profile.d/conda.sh}"
 conda_env="${CONDA_ENV:-srp-augmentation}"
