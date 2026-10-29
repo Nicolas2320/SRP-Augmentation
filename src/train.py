@@ -85,6 +85,7 @@ RESNET50_INPUT_SIZE = 224
 DatasetName = Literal["cifar10", "cifar100", "tinyimagenet"]
 ModelName = Literal["resnet50", "vit"]
 AugmentationName = Literal["raw", "none", "mixup", "cutmix", "augmix", "simmixup", "simcutmix"]
+EASY_TO_HARD_WINDOWS = ((21, 40), (11, 30), (1, 10))
 
 
 @dataclass
@@ -128,6 +129,8 @@ class ExperimentConfig:
     cutmix_prob: float = 0.5
     cutmix_alpha: float = 1.0
     pretrained: bool = False
+    pair_curriculum: str = "fixed"
+    curriculum_transition_epochs: tuple[int, ...] = ()
 
 
 # -----------------------------------------------------------------------------
@@ -465,6 +468,16 @@ def load_neighbor_payload(
     return payload
 
 
+def curriculum_windows(config: ExperimentConfig) -> tuple[tuple[int, int], ...]:
+    """Return the declared rank schedule for a guided-pair experiment."""
+
+    if config.pair_curriculum == "fixed":
+        return ()
+    if config.pair_curriculum == "easy_to_hard":
+        return EASY_TO_HARD_WINDOWS
+    raise ValueError(f"Unsupported pair curriculum: {config.pair_curriculum}")
+
+
 def load_anchor_mix_probabilities(
     path: str | None,
     train_indices: list[int] | tuple[int, ...],
@@ -597,11 +610,18 @@ def build_dataloaders(
     if config.augmentation in {"simmixup", "simcutmix"}:
         if config.neighbor_path is None:
             raise ValueError(f"--neighbor-path is required when --augmentation {config.augmentation}")
+        rank_windows = curriculum_windows(config)
+        load_rank_start = config.neighbor_rank_start
+        load_neighbor_k = config.neighbor_k
+        if rank_windows:
+            load_rank_start = min(start for start, _end in rank_windows)
+            load_rank_end = max(end for _start, end in rank_windows)
+            load_neighbor_k = load_rank_end - load_rank_start + 1
         neighbor_payload = load_neighbor_payload(
             path=config.neighbor_path,
             guided_mode=config.guided_mode,
-            neighbor_k=config.neighbor_k,
-            neighbor_rank_start=config.neighbor_rank_start,
+            neighbor_k=load_neighbor_k,
+            neighbor_rank_start=load_rank_start,
         )
         anchor_mix_probs = load_anchor_mix_probabilities(
             path=config.anchor_score_path,
@@ -624,6 +644,8 @@ def build_dataloaders(
             hard_neighbor_pool_size=config.hard_neighbor_pool_size,
             difficulty_threshold=config.difficulty_threshold,
             top_rank_only=config.top_rank_only,
+            curriculum_windows=rank_windows,
+            curriculum_transition_epochs=config.curriculum_transition_epochs,
         )
     else:
         train_dataset = Subset(train_full, train_indices)
@@ -945,12 +967,16 @@ def experiment_name(config: ExperimentConfig) -> str:
             f"_anchor_{anchor_source}_{config.anchor_selection}_"
             f"top{top_pct}_pow{score_power}"
         )
+    curriculum_part = ""
+    if config.pair_curriculum != "fixed":
+        transitions = "-".join(str(epoch) for epoch in config.curriculum_transition_epochs)
+        curriculum_part = f"_curriculum_{config.pair_curriculum}_t{transitions}"
     return (
         f"{base_name}_{config.guided_mode}_"
         f"{neighbor_source}_"
         f"nk{config.neighbor_k}_r{rank_start}-{rank_end}_{config.pair_sampling}_"
         f"alpha{alpha}_mp{mix_prob}_warm{config.mix_warmup_epochs}_"
-        f"epochs{config.epochs}{anchor_part}"
+        f"epochs{config.epochs}{curriculum_part}{anchor_part}"
     )
 
 
@@ -986,6 +1012,9 @@ def experiment_config_id(config: ExperimentConfig) -> str:
     identity = asdict(config)
     for key in ("data_root", "split_root", "output_root", "num_workers"):
         identity.pop(key, None)
+    if config.pair_curriculum == "fixed":
+        identity.pop("pair_curriculum", None)
+        identity.pop("curriculum_transition_epochs", None)
     for key in ("neighbor_path", "anchor_score_path"):
         if identity.get(key):
             identity[key] = str(identity[key]).replace("\\", "/")
@@ -1061,9 +1090,13 @@ def guided_variant_name(config: ExperimentConfig) -> str:
     rank_start = int(config.neighbor_rank_start)
     rank_end = rank_start + int(config.neighbor_k) - 1
     source_k = neighbor_source_k_from_path(config.neighbor_path, config.neighbor_k)
+    curriculum_part = ""
+    if config.pair_curriculum != "fixed":
+        transitions = "-".join(str(epoch) for epoch in config.curriculum_transition_epochs)
+        curriculum_part = f"_{filename_component(config.pair_curriculum)}_t{transitions}"
     return (
         f"{filename_component(config.guided_mode)}_"
-        f"k{source_k}_r{rank_start}-{rank_end}"
+        f"k{source_k}_r{rank_start}-{rank_end}{curriculum_part}"
     )
 
 
@@ -1092,9 +1125,14 @@ def format_neighbor_rank_summary(train_dataset: Any, effective_mix_prob: float) 
     if not callable(rank_counter):
         return ""
 
-    neighbor_k = int(getattr(train_dataset, "neighbor_indices").shape[1])
-    rank_start = int(getattr(train_dataset, "neighbor_rank_start", 1))
-    rank_end = rank_start + neighbor_k - 1
+    rank_window = getattr(train_dataset, "current_neighbor_rank_window", None)
+    if callable(rank_window):
+        rank_start, rank_end = rank_window()
+    else:
+        neighbor_k = int(getattr(train_dataset, "neighbor_indices").shape[1])
+        rank_start = int(getattr(train_dataset, "neighbor_rank_start", 1))
+        rank_end = rank_start + neighbor_k - 1
+    neighbor_k = rank_end - rank_start + 1
     if effective_mix_prob <= 0.0:
         return (
             f" | neighbor_k={neighbor_k} | "
@@ -1134,6 +1172,8 @@ def save_metrics_csv(metrics: list[dict], output_path: Path) -> None:
         "train_acc",
         "val_loss",
         "val_acc",
+        "neighbor_rank_start",
+        "neighbor_rank_end",
     ]
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:
@@ -1154,6 +1194,38 @@ def save_json(path: Path, data: dict) -> None:
 # -----------------------------------------------------------------------------
 # Main experiment logic
 # -----------------------------------------------------------------------------
+
+
+def validate_curriculum_config(config: ExperimentConfig) -> None:
+    """Reject ambiguous or scientifically unmatched curriculum configurations."""
+
+    transitions = tuple(config.curriculum_transition_epochs)
+    if config.pair_curriculum == "fixed":
+        if transitions:
+            raise ValueError("Fixed pairing cannot declare curriculum transition epochs")
+        return
+    if config.pair_curriculum != "easy_to_hard":
+        raise ValueError(f"Unsupported pair curriculum: {config.pair_curriculum}")
+    if config.augmentation != "simcutmix":
+        raise ValueError("Easy-to-hard curriculum currently supports only SimCutMix")
+    if config.guided_mode != "class_agnostic":
+        raise ValueError("Easy-to-hard curriculum requires class_agnostic neighbors")
+    if (config.neighbor_rank_start, config.neighbor_k) != (21, 20):
+        raise ValueError(
+            "Easy-to-hard curriculum must be compared with the frozen ranks 21-40 "
+            "configuration (--neighbor-rank-start 21 --neighbor-k 20)"
+        )
+    if config.pair_sampling != "uniform":
+        raise ValueError("Easy-to-hard curriculum requires uniform pair sampling")
+    if config.dynamic_neighbor_pool or config.top_rank_only:
+        raise ValueError("Easy-to-hard curriculum cannot be combined with dynamic/top-rank modes")
+    if len(transitions) != 2:
+        raise ValueError("Easy-to-hard curriculum requires exactly two transition epochs")
+    first, second = transitions
+    if not 2 <= first < second <= config.epochs:
+        raise ValueError(
+            "Curriculum transitions must satisfy 2 <= FIRST < SECOND <= epochs"
+        )
 
 
 def build_optimizer(
@@ -1243,6 +1315,7 @@ def run_experiment(
     evaluate_only: bool = False,
 ) -> None:
     """Run one training experiment."""
+    validate_curriculum_config(config)
     set_seed(config.train_seed)
     device = get_device()
 
@@ -1404,7 +1477,12 @@ def run_experiment(
             "train_acc": train_acc,
             "val_loss": val_loss,
             "val_acc": val_acc,
+            "neighbor_rank_start": "",
+            "neighbor_rank_end": "",
         }
+        rank_window = getattr(train_dataset, "current_neighbor_rank_window", None)
+        if callable(rank_window):
+            row["neighbor_rank_start"], row["neighbor_rank_end"] = rank_window()
         metrics.append(row)
         scheduler.step()
 
@@ -1646,6 +1724,24 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
         help="How to sample partners from each saved neighbor set.",
     )
     parser.add_argument(
+        "--pair-curriculum",
+        type=str,
+        default="fixed",
+        choices=["fixed", "easy_to_hard"],
+        help=(
+            "Partner-rank schedule. easy_to_hard uses ranks 21-40, then 11-30, "
+            "then 1-10 at the declared transition epochs."
+        ),
+    )
+    parser.add_argument(
+        "--curriculum-transition-epochs",
+        type=int,
+        nargs=2,
+        default=None,
+        metavar=("FIRST", "SECOND"),
+        help="First epochs of the middle and late easy-to-hard curriculum phases.",
+    )
+    parser.add_argument(
         "--mix-prob",
         type=float,
         default=0.3,
@@ -1779,7 +1875,13 @@ def parse_args() -> tuple[ExperimentConfig, bool, bool]:
         cutmix_prob=args.cutmix_prob,
         cutmix_alpha=args.cutmix_alpha,
         pretrained=args.pretrained,
+        pair_curriculum=args.pair_curriculum,
+        curriculum_transition_epochs=tuple(args.curriculum_transition_epochs or ()),
     )
+    try:
+        validate_curriculum_config(config)
+    except ValueError as error:
+        parser.error(str(error))
     return config, not args.skip_test, args.evaluate_only
 
 

@@ -333,6 +333,51 @@ class IndexedDatasetTests(unittest.TestCase):
 
         self.assertLess(dataset._sample_neighbor_slot(0, 0), 6)
 
+    def test_easy_to_hard_curriculum_changes_active_rank_window_by_epoch(self):
+        repeated_neighbors = (self.train_indices * 7)[:40]
+        payload = {
+            "mode": "class_agnostic",
+            "original_indices": torch.tensor(self.train_indices),
+            "neighbor_indices": torch.tensor(
+                [repeated_neighbors] * len(self.train_indices)
+            ),
+            "neighbor_rank_start": 1,
+        }
+        dataset = GuidedPairDataset(
+            self.base_dataset,
+            self.train_indices,
+            payload,
+            mode="class_agnostic",
+            seed=0,
+            curriculum_windows=((21, 40), (11, 30), (1, 10)),
+            curriculum_transition_epochs=(34, 67),
+        )
+
+        for epoch, expected_window, slot_bounds in (
+            (1, (21, 40), (20, 40)),
+            (33, (21, 40), (20, 40)),
+            (34, (11, 30), (10, 30)),
+            (66, (11, 30), (10, 30)),
+            (67, (1, 10), (0, 10)),
+            (100, (1, 10), (0, 10)),
+        ):
+            with self.subTest(epoch=epoch):
+                dataset.set_epoch(epoch)
+                self.assertEqual(dataset.current_neighbor_rank_window(), expected_window)
+                slot = dataset._sample_neighbor_slot(0, 0)
+                self.assertGreaterEqual(slot, slot_bounds[0])
+                self.assertLess(slot, slot_bounds[1])
+
+    def test_curriculum_rejects_window_outside_loaded_neighbor_payload(self):
+        with self.assertRaisesRegex(ValueError, "exceeds loaded neighbor ranks"):
+            GuidedPairDataset(
+                self.base_dataset,
+                self.train_indices,
+                class_agnostic_neighbors(),
+                mode="class_agnostic",
+                curriculum_windows=((1, 10),),
+            )
+
 
 class ExistingTrainingShapeTests(unittest.TestCase):
     def test_existing_augmentation_modes_still_train_on_two_item_batches(self):

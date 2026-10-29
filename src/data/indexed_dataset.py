@@ -12,6 +12,7 @@ from torch.utils.data import Dataset
 PairSampling = Literal["uniform", "weighted"]
 NeighborMode = Literal["class_aware", "class_agnostic", "different_label"]
 NEIGHBOR_MODES = {"class_aware", "class_agnostic", "different_label"}
+RankWindow = tuple[int, int]
 
 
 class IndexedDataset(Dataset):
@@ -53,6 +54,8 @@ class GuidedPairDataset(Dataset):
         hard_neighbor_pool_size: int = 10,
         difficulty_threshold: float = 0.8,
         top_rank_only: bool = False,
+        curriculum_windows: tuple[RankWindow, ...] | None = None,
+        curriculum_transition_epochs: tuple[int, ...] = (),
     ):
         if pair_sampling not in {"uniform", "weighted"}:
             raise ValueError(f"Unsupported pair_sampling: {pair_sampling}")
@@ -72,6 +75,10 @@ class GuidedPairDataset(Dataset):
         self.hard_neighbor_pool_size = max(1, int(hard_neighbor_pool_size))
         self.difficulty_threshold = float(difficulty_threshold)
         self.top_rank_only = bool(top_rank_only)
+        self.curriculum_windows = tuple(curriculum_windows or ())
+        self.curriculum_transition_epochs = tuple(
+            int(epoch) for epoch in curriculum_transition_epochs
+        )
 
         payload = _load_neighbor_index(neighbor_index)
         payload_mode = payload.get("mode")
@@ -91,7 +98,8 @@ class GuidedPairDataset(Dataset):
 
         self.original_indices = original_indices
         self.neighbor_indices = neighbor_indices
-        self.neighbor_rank_start = int(payload.get("neighbor_rank_start", 1))
+        self.source_neighbor_rank_start = int(payload.get("neighbor_rank_start", 1))
+        self.neighbor_rank_start = self.source_neighbor_rank_start
         self.row_by_global_index = _build_index_lookup(original_indices)
 
         missing = sorted(index for index in self.train_indices if index not in self.row_by_global_index)
@@ -121,6 +129,8 @@ class GuidedPairDataset(Dataset):
 
         if self.dynamic_neighbor_pool:
             self._validate_neighbor_pool_settings()
+        self._validate_curriculum_settings()
+        self._update_active_rank_window()
 
     def __len__(self) -> int:
         return len(self.train_indices)
@@ -129,6 +139,12 @@ class GuidedPairDataset(Dataset):
         """Change deterministic partner choices between epochs."""
 
         self.epoch = int(epoch)
+        self._update_active_rank_window()
+
+    def current_neighbor_rank_window(self) -> RankWindow:
+        """Return the active inclusive 1-indexed neighbor-rank window."""
+
+        return self._active_rank_window
 
     def sampled_neighbor_rank_counts(self) -> torch.Tensor:
         """Count selected neighbor ranks for the current epoch.
@@ -175,14 +191,21 @@ class GuidedPairDataset(Dataset):
         generator = torch.Generator()
         generator.manual_seed(self._sample_seed(position))
 
-        num_neighbors = int(self.neighbor_indices.shape[1])
+        slot_start, slot_end = self._active_slot_bounds()
+        num_neighbors = slot_end - slot_start
         if self.top_rank_only:
-            return 0
+            return slot_start
 
         if not self.dynamic_neighbor_pool:
             if self.weights is None:
-                return int(torch.randint(num_neighbors, size=(1,), generator=generator).item())
-            return int(torch.multinomial(self.weights[row], num_samples=1, generator=generator).item())
+                offset = int(torch.randint(num_neighbors, size=(1,), generator=generator).item())
+                return slot_start + offset
+            window_weights = self.weights[row, slot_start:slot_end]
+            window_weights = window_weights / window_weights.sum().clamp_min(1e-12)
+            offset = int(
+                torch.multinomial(window_weights, num_samples=1, generator=generator).item()
+            )
+            return slot_start + offset
 
         pool_size = self._get_neighbor_pool_size(row)
         if pool_size > num_neighbors:
@@ -191,15 +214,17 @@ class GuidedPairDataset(Dataset):
             pool_size = 1
 
         if self.weights is None:
-            return int(torch.randint(pool_size, size=(1,), generator=generator).item())
+            offset = int(torch.randint(pool_size, size=(1,), generator=generator).item())
+            return slot_start + offset
 
         if self.weights.dtype != torch.float32:
             weights = self.weights[row].float()
         else:
             weights = self.weights[row]
-        pool_weights = weights[:pool_size]
+        pool_weights = weights[slot_start : slot_start + pool_size]
         pool_weights = pool_weights / pool_weights.sum().clamp_min(1e-12)
-        return int(torch.multinomial(pool_weights, num_samples=1, generator=generator).item())
+        offset = int(torch.multinomial(pool_weights, num_samples=1, generator=generator).item())
+        return slot_start + offset
 
     def _get_neighbor_pool_size(self, row: int) -> int:
         if not self.dynamic_neighbor_pool:
@@ -217,6 +242,44 @@ class GuidedPairDataset(Dataset):
             raise ValueError("easy_neighbor_pool_size must be positive")
         if self.hard_neighbor_pool_size <= 0:
             raise ValueError("hard_neighbor_pool_size must be positive")
+
+    def _validate_curriculum_settings(self) -> None:
+        if not self.curriculum_windows:
+            if self.curriculum_transition_epochs:
+                raise ValueError("Curriculum transitions require curriculum rank windows")
+            return
+        if self.dynamic_neighbor_pool:
+            raise ValueError("Curriculum cannot be combined with dynamic neighbor pools")
+        if len(self.curriculum_transition_epochs) != len(self.curriculum_windows) - 1:
+            raise ValueError("Curriculum requires one fewer transition than rank windows")
+        if any(epoch < 1 for epoch in self.curriculum_transition_epochs):
+            raise ValueError("Curriculum transition epochs must be positive")
+        if tuple(sorted(set(self.curriculum_transition_epochs))) != self.curriculum_transition_epochs:
+            raise ValueError("Curriculum transition epochs must be unique and increasing")
+        source_end = self.source_neighbor_rank_start + self.neighbor_indices.shape[1] - 1
+        for rank_start, rank_end in self.curriculum_windows:
+            if rank_start < self.source_neighbor_rank_start or rank_end < rank_start:
+                raise ValueError(f"Invalid curriculum rank window: {rank_start}-{rank_end}")
+            if rank_end > source_end:
+                raise ValueError(
+                    f"Curriculum rank window {rank_start}-{rank_end} exceeds loaded "
+                    f"neighbor ranks {self.source_neighbor_rank_start}-{source_end}"
+                )
+
+    def _update_active_rank_window(self) -> None:
+        if not self.curriculum_windows:
+            source_end = self.source_neighbor_rank_start + self.neighbor_indices.shape[1] - 1
+            self._active_rank_window = (self.source_neighbor_rank_start, source_end)
+        else:
+            phase = sum(self.epoch >= epoch for epoch in self.curriculum_transition_epochs)
+            self._active_rank_window = self.curriculum_windows[phase]
+        self.neighbor_rank_start = self._active_rank_window[0]
+
+    def _active_slot_bounds(self) -> tuple[int, int]:
+        rank_start, rank_end = self._active_rank_window
+        slot_start = rank_start - self.source_neighbor_rank_start
+        slot_end = rank_end - self.source_neighbor_rank_start + 1
+        return slot_start, slot_end
 
     def _sample_seed(self, position: int) -> int:
         return (self.seed + 1_000_003 * int(self.epoch) + 97_003 * int(position)) % (2**63 - 1)

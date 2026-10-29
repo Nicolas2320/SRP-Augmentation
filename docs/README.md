@@ -1,7 +1,7 @@
 # Documentation Index
 
 This directory contains current operating documentation, generated evidence,
-and historical project records. Last reviewed: 2026-10-26.
+and historical project records. Last reviewed: 2026-10-29.
 
 ## Current Guides
 
@@ -17,6 +17,7 @@ and historical project records. Last reviewed: 2026-10-26.
 | [CIFAR-100 confirmation results](third_presentation_results.md) | Three-seed final-test tables and paired effects | Current |
 | [Pair-selection ablation results](pair_selection_ablation_results.md) | Controlled validation-only partner-selection comparison | Current |
 | [Tiny ImageNet results](tiny_imagenet_results.md) | Three-seed cross-dataset confirmation and limitations | Current |
+| [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and execution order | In progress |
 
 ## Evidence
 

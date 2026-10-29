@@ -27,6 +27,7 @@ from src.train import (
     format_neighbor_rank_summary,
     get_transforms,
     get_num_classes,
+    validate_curriculum_config,
 )
 
 
@@ -229,6 +230,45 @@ class TrainingRecipeTests(unittest.TestCase):
             experiment_config_id(original),
             experiment_config_id(different_lr),
         )
+
+    def test_curriculum_has_distinct_identity_and_output_folder(self):
+        fixed = training_config(
+            augmentation="simcutmix",
+            neighbor_path="neighbors_class_agnostic_K40.pt",
+            neighbor_rank_start=21,
+        )
+        curriculum = training_config(
+            augmentation="simcutmix",
+            neighbor_path="neighbors_class_agnostic_K40.pt",
+            neighbor_rank_start=21,
+            pair_curriculum="easy_to_hard",
+            curriculum_transition_epochs=(34, 67),
+        )
+
+        self.assertNotEqual(experiment_config_id(fixed), experiment_config_id(curriculum))
+        self.assertIn("easy_to_hard_t34-67", experiment_output_dir(curriculum).as_posix())
+
+    def test_curriculum_validation_requires_frozen_matched_configuration(self):
+        valid = training_config(
+            augmentation="simcutmix",
+            neighbor_path="neighbors_class_agnostic_K40.pt",
+            neighbor_rank_start=21,
+            pair_curriculum="easy_to_hard",
+            curriculum_transition_epochs=(34, 67),
+        )
+        validate_curriculum_config(valid)
+
+        with self.assertRaisesRegex(ValueError, "uniform pair sampling"):
+            validate_curriculum_config(
+                training_config(
+                    augmentation="simcutmix",
+                    neighbor_path="neighbors_class_agnostic_K40.pt",
+                    neighbor_rank_start=21,
+                    pair_sampling="weighted",
+                    pair_curriculum="easy_to_hard",
+                    curriculum_transition_epochs=(34, 67),
+                )
+            )
 
     def test_existing_run_is_never_silently_overwritten(self):
         with tempfile.TemporaryDirectory() as temp:
