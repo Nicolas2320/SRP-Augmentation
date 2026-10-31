@@ -18,6 +18,9 @@ and historical project records. Last reviewed: 2026-10-29.
 | [Pair-selection ablation results](pair_selection_ablation_results.md) | Controlled validation-only partner-selection comparison | Current |
 | [Tiny ImageNet results](tiny_imagenet_results.md) | Three-seed cross-dataset confirmation and limitations | Current |
 | [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and execution order | In progress |
+| [Experiment evidence status](experiment_evidence_status.md) | Final, screening, historical, and pending experiment inventory | Current |
+| [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Delegated architecture-transfer matrix and execution gates | Planned |
+| [Remaining cluster jobs](remaining_cluster_jobs.md) | Ordered curriculum, Tiny ImageNet k=100, and MixUp submissions | Current |
 
 ## Evidence
 

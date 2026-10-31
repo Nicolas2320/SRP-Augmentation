@@ -18,12 +18,14 @@ Usage:
 Arguments:
   INITIALIZATION  scratch | pretrained
   K               20 | 50 | 100 | 200 | 300 | 450
-  MODE            smoke | screen
+  MODE            smoke | screen | evaluate
   SUBSET_SEED     0 | 1 | 2 (k=450 requires 0)
   TRAIN_SEED      non-negative integer
 
 The stepwise schedule uses ranks 21-40 in the first third, 11-30 in the
-second third, and 1-10 in the final third. All runs are validation-only.
+second third, and 1-10 in the final third. smoke and screen are
+validation-only. evaluate tests an existing best-validation checkpoint
+without retraining.
 EOF
 }
 
@@ -36,7 +38,7 @@ train_seed="$5"
 
 case "$initialization" in scratch|pretrained) ;; *) echo "Invalid initialization" >&2; exit 2 ;; esac
 case "$k" in 20|50|100|200|300|450) ;; *) echo "Invalid k" >&2; exit 2 ;; esac
-case "$run_mode" in smoke|screen) ;; *) echo "Invalid mode: $run_mode" >&2; exit 2 ;; esac
+case "$run_mode" in smoke|screen|evaluate) ;; *) echo "Invalid mode: $run_mode" >&2; exit 2 ;; esac
 case "$subset_seed" in 0|1|2) ;; *) echo "Invalid subset seed" >&2; exit 2 ;; esac
 [[ "$train_seed" =~ ^[0-9]+$ ]] || { echo "Invalid training seed" >&2; exit 2; }
 if [[ "$k" == "450" && "$subset_seed" != "0" ]]; then
@@ -74,9 +76,12 @@ if [[ "$k" == "450" ]]; then
     milestones=(15 30 40)
 fi
 output_root="results/third_presentation/curriculum/$initialization"
+evaluation_args=(--skip-test)
 if [[ "$run_mode" == "smoke" ]]; then
     epochs=3
     output_root="results/smoke/curriculum/$initialization"
+elif [[ "$run_mode" == "evaluate" ]]; then
+    evaluation_args=(--evaluate-only)
 fi
 
 # These are the first epochs of phases two and three. Integer division keeps
@@ -100,7 +105,7 @@ train_args=(
     --pair-curriculum easy_to_hard
     --curriculum-transition-epochs "$transition_first" "$transition_second"
     --num-workers "${SLURM_CPUS_PER_TASK:-2}" --output-root "$output_root"
-    --skip-test
+    "${evaluation_args[@]}"
 )
 
 echo "Started: $(date --iso-8601=seconds)"

@@ -1,7 +1,8 @@
 # Easy-to-Hard Pair Curriculum Plan
 
-Status: implementation phase. This is an optional extension requested after the
-third-presentation must-have experiments were completed.
+Status: three-seed validation phase complete; selected scratch k=20 checkpoints
+are awaiting one evaluation-only test pass. This is an optional extension
+requested after the third-presentation must-have experiments were completed.
 
 ## Frozen Question
 
