@@ -26,6 +26,29 @@ Gate: all three top-level jobs must be `COMPLETED`, and every updated summary
 must retain `best_val_acc` while adding `test_evaluated=true` and a test
 accuracy.
 
+## Stage A2 — Evaluate the Matched Fixed-Window Control
+
+The curriculum uses mixing probability 0.5. Evaluate the existing fixed
+ranks-21-40 checkpoints with that same probability before making a causal
+curriculum claim. These jobs do not retrain.
+
+```bash
+FIXED_WINDOW_JOBS="logs/fixed-window-k20-evaluation-jobs.txt"
+: > "$FIXED_WINDOW_JOBS"
+
+for seed in 0 1 2; do
+  jid=$(sbatch --parsable \
+    scripts/run_pair_ablation.slurm \
+    scratch 20 less_similar evaluate "$seed" "$seed")
+  printf 'fixed_window_k20_seed%s=%s\n' "$seed" "$jid" \
+    | tee -a "$FIXED_WINDOW_JOBS"
+done
+```
+
+Gate: all three top-level jobs must be `COMPLETED`. Each fixed-window summary
+must retain its original validation selection and add one test evaluation.
+Only then compare curriculum versus fixed ranks 21-40.
+
 ## Stage B — Complete Tiny ImageNet k=100
 
 The seed-0 runs already exist as validation-only checkpoints. Splits for seeds

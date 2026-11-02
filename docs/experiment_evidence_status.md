@@ -137,7 +137,7 @@ scratch k=20 curriculum checkpoints.
 
 | Priority | Experiment/task | New work | Purpose | Recommendation |
 |---:|---|---:|---|---|
-| 1 | Curriculum scratch k=20 final evaluation | 3 checkpoint evaluations; no retraining | Close the optional curriculum study | Do now |
+| 1 | Matched fixed-window scratch k=20 evaluation | 3 checkpoint evaluations; no retraining | Complete the causal curriculum comparison after curriculum evaluation | Do now |
 | 2 | Tiny ImageNet k=100 confirmation | Verify/build two seed-specific support payloads; 12 new seed-1/2 training runs; evaluate six existing/new configurations as appropriate | Add the missing middle point and test whether the low-data advantage decays | Do next |
 | 3 | Standard MixUp three-seed CIFAR-100 matrix | 24 new seed-1/2 training runs plus seed-0 audit/evaluation | Add a robust fourth baseline | Recommended if cluster time permits |
 | 4 | Final analysis and presentation figures | No GPU work | Convert evidence into the final narrative | Required |
