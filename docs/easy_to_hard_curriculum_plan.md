@@ -1,8 +1,8 @@
 # Easy-to-Hard Pair Curriculum Plan
 
-Status: three-seed validation phase complete; selected scratch k=20 checkpoints
-are awaiting one evaluation-only test pass. This is an optional extension
-requested after the third-presentation must-have experiments were completed.
+Status: complete. Three-seed validation was followed by a matched scratch
+k=20 test evaluation of the curriculum and fixed-window control. The
+curriculum did not improve on the fixed window.
 
 ## Frozen Question
 
@@ -32,9 +32,9 @@ Use CIFAR-100 training from scratch at `k=20` and `k=100`, with paired
 | Fixed SimCutMix ranks 21-40 | 0.5 | Reuse seed 0 pair ablation; add seeds 1 and 2 |
 | Stepwise SimCutMix curriculum | 0.5 | Run seeds 0, 1, and 2 |
 
-This requires ten new full jobs: four fixed-window confirmations and six
-curriculum jobs. All new jobs are validation-only (`--skip-test`). No test result
-will be used to choose the schedule.
+This required ten new full jobs: four fixed-window confirmations and six
+curriculum jobs. They were run validation-only (`--skip-test`), so the schedule
+was selected without test-set feedback.
 
 ## Execution Order
 
@@ -44,3 +44,25 @@ will be used to choose the schedule.
 4. Submit the ten validation-only jobs.
 5. Compare paired validation deltas before deciding whether any final test
    confirmation is warranted.
+
+## Results
+
+Validation accuracy, mean ± sample SD:
+
+| k | Random CutMix | Fixed ranks 21-40 | Easy-to-hard |
+|---:|---:|---:|---:|
+| 20 | 15.50 ± 1.20 | 16.78 ± 0.94 | 16.97 ± 0.78 |
+| 100 | 52.03 ± 0.82 | 53.61 ± 1.24 | 53.65 ± 1.04 |
+
+Scratch k=20 test accuracy:
+
+| Condition | Test accuracy |
+|---|---:|
+| Crop+Flip | **17.51 ± 0.45** |
+| Random CutMix | 15.54 ± 0.59 |
+| Fixed ranks 21-40, p=0.5 | 17.18 ± 0.76 |
+| Easy-to-hard curriculum, p=0.5 | 17.10 ± 0.85 |
+
+The curriculum-minus-fixed paired delta is -0.07 ± 0.11 pp and the
+curriculum wins 0/3 seeds. The fixed window is simpler and at least as good;
+the curriculum should be reported as a negative extension result.

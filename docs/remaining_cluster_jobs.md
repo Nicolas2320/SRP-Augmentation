@@ -1,11 +1,15 @@
 # Remaining Cluster Jobs
 
-Last updated: 2026-10-31.
+Last updated: 2026-11-14.
+
+Stages A, A2, B, and C are complete. Do not resubmit jobs from this file.
 
 Run these stages in order. Every submission writes its job IDs below `logs/`.
 Do not resubmit a stage whose summaries have already been reviewed and merged.
 
 ## Stage A — Evaluate the Frozen Curriculum Candidate
+
+Status: **Complete**.
 
 These jobs load the existing scratch k=20 best-validation checkpoints and
 evaluate them once on the test set. They do not retrain.
@@ -27,6 +31,8 @@ must retain `best_val_acc` while adding `test_evaluated=true` and a test
 accuracy.
 
 ## Stage A2 — Evaluate the Matched Fixed-Window Control
+
+Status: **Complete**.
 
 The curriculum uses mixing probability 0.5. Evaluate the existing fixed
 ranks-21-40 checkpoints with that same probability before making a causal
@@ -50,6 +56,8 @@ must retain its original validation selection and add one test evaluation.
 Only then compare curriculum versus fixed ranks 21-40.
 
 ## Stage B — Complete Tiny ImageNet k=100
+
+Status: **Complete**. All 18 outcomes are available.
 
 The seed-0 runs already exist as validation-only checkpoints. Splits for seeds
 1 and 2 are committed. First ensure that the two class-agnostic K40 support
@@ -98,6 +106,9 @@ Gate: 18 top-level jobs must be `COMPLETED`. The final evidence must contain
 three paired seeds for each of the six initialization/method cells.
 
 ## Stage C — Promote Standard MixUp to the CIFAR-100 Final Matrix
+
+Status: **Complete**. All 36 tested MixUp outcomes are available after
+including the three compatible reused seed-0 records.
 
 The final recipe is already frozen. Seed-0 screening checkpoints exist for
 scratch at every k and for pretrained k=200/300/450. Compatible, already-tested

@@ -24,14 +24,20 @@ import pandas as pd
 
 INITIALIZATIONS = ("scratch", "pretrained")
 K_VALUES = (20, 50, 100, 200, 300, 450)
-METHODS = ("none", "cutmix", "simcutmix")
+METHODS = ("none", "mixup", "cutmix", "simcutmix")
 DISPLAY_NAMES = {
     "none": "Crop+Flip",
+    "mixup": "MixUp",
     "cutmix": "CutMix",
     "simcutmix": "SimCutMix",
 }
-COLORS = {"none": "#5F6368", "cutmix": "#F58518", "simcutmix": "#E45756"}
-MARKERS = {"none": "o", "cutmix": "^", "simcutmix": "D"}
+COLORS = {
+    "none": "#5F6368",
+    "mixup": "#54A24B",
+    "cutmix": "#F58518",
+    "simcutmix": "#E45756",
+}
+MARKERS = {"none": "o", "mixup": "v", "cutmix": "^", "simcutmix": "D"}
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -67,6 +73,8 @@ def validate_summary(
     }
     if method in {"cutmix", "simcutmix"}:
         expected.update({"cutmix_alpha": 1.0, "cutmix_prob": 0.5})
+    if method == "mixup":
+        expected.update({"mixup_alpha": 1.0})
     if method == "simcutmix":
         expected.update(
             {
@@ -159,8 +167,8 @@ def load_confirmation_runs(manifest_path: Path, final_root: Path) -> pd.DataFram
                         }
                     )
     runs = pd.DataFrame.from_records(records)
-    if len(runs) != 108:
-        raise ValueError(f"Expected 108 confirmation cells; found {len(runs)}")
+    if len(runs) != 144:
+        raise ValueError(f"Expected 144 confirmation cells; found {len(runs)}")
     return runs
 
 
@@ -183,11 +191,20 @@ def paired_deltas(runs: pd.DataFrame) -> pd.DataFrame:
         index=["initialization", "k", "train_seed"], columns="method", values="test_acc"
     ).reset_index()
     records = []
-    for comparison, proposal, baseline in (
+    comparisons = [
         ("simcutmix_vs_none", "simcutmix", "none"),
         ("simcutmix_vs_cutmix", "simcutmix", "cutmix"),
         ("cutmix_vs_none", "cutmix", "none"),
-    ):
+    ]
+    if "mixup" in wide.columns:
+        comparisons.extend(
+            [
+                ("mixup_vs_none", "mixup", "none"),
+                ("mixup_vs_cutmix", "mixup", "cutmix"),
+                ("mixup_vs_simcutmix", "mixup", "simcutmix"),
+            ]
+        )
+    for comparison, proposal, baseline in comparisons:
         for row in wide.itertuples(index=False):
             records.append(
                 {
@@ -307,8 +324,8 @@ def markdown_report(summary: pd.DataFrame, paired: pd.DataFrame) -> str:
             [
                 f"## {title}",
                 "",
-                "| k | Crop+Flip | CutMix | SimCutMix |",
-                "|---:|---:|---:|---:|",
+                "| k | Crop+Flip | MixUp | CutMix | SimCutMix |",
+                "|---:|---:|---:|---:|---:|",
             ]
         )
         panel = summary[summary["initialization"] == initialization]
@@ -334,6 +351,9 @@ def markdown_report(summary: pd.DataFrame, paired: pd.DataFrame) -> str:
         ("simcutmix_vs_none", "SimCutMix versus Crop+Flip"),
         ("simcutmix_vs_cutmix", "SimCutMix versus CutMix"),
         ("cutmix_vs_none", "CutMix versus Crop+Flip"),
+        ("mixup_vs_none", "MixUp versus Crop+Flip"),
+        ("mixup_vs_cutmix", "MixUp versus CutMix"),
+        ("mixup_vs_simcutmix", "MixUp versus SimCutMix"),
     ):
         rows = paired[paired["comparison"] == comparison]
         mean = rows["delta_test_pp"].mean()

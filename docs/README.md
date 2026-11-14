@@ -1,7 +1,7 @@
 # Documentation Index
 
 This directory contains current operating documentation, generated evidence,
-and historical project records. Last reviewed: 2026-10-29.
+and historical project records. Last reviewed: 2026-11-14.
 
 ## Current Guides
 
@@ -10,17 +10,17 @@ and historical project records. Last reviewed: 2026-10-29.
 | [Architecture](architecture.md) | Code layout, data flow, training flow, and artifacts | Current |
 | [Reproducibility](reproducibility.md) | Environment, verification, and reproduction commands | Current |
 | [ISMLL cluster workflow](cluster_workflow.md) | GitHub synchronization, Slurm execution, monitoring, and artifact policy | Current |
-| [Third-presentation job matrix](third_presentation_job_matrix.md) | Supervisor-aligned experiment priorities, job counts, gates, and reporting plan | Current |
+| [Third-presentation job matrix](third_presentation_job_matrix.md) | Supervisor-aligned experiment priorities, job counts, gates, and reporting plan | Executed plan |
 | [ResNet50 comparison v1](resnet_comparison_v1.md) | Fixed protocol, run matrix, and known deviations | Current |
 | [Project status](project_status.md) | Evidence inventory, verified results, gaps, and next work | Current |
 | [Presentation outline](presentation_outline.md) | Suggested presentation based on the current evidence | Current |
 | [CIFAR-100 confirmation results](third_presentation_results.md) | Three-seed final-test tables and paired effects | Current |
 | [Pair-selection ablation results](pair_selection_ablation_results.md) | Controlled validation-only partner-selection comparison | Current |
 | [Tiny ImageNet results](tiny_imagenet_results.md) | Three-seed cross-dataset confirmation and limitations | Current |
-| [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and execution order | In progress |
+| [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and completed negative result | Complete |
 | [Experiment evidence status](experiment_evidence_status.md) | Final, screening, historical, and pending experiment inventory | Current |
 | [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Delegated architecture-transfer matrix and execution gates | Planned |
-| [Remaining cluster jobs](remaining_cluster_jobs.md) | Ordered curriculum, Tiny ImageNet k=100, and MixUp submissions | Current |
+| [Remaining cluster jobs](remaining_cluster_jobs.md) | Completed curriculum, Tiny ImageNet, and MixUp stages | Complete |
 
 ## Evidence
 

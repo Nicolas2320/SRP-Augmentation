@@ -2,6 +2,9 @@ initialization,k,method,subset_seed,train_seed,best_val_acc,test_acc,best_epoch,
 scratch,20,none,0,0,0.1672,0.1715,89,results/third_presentation/screening/scratch/cifar100/resnet50/k20/none/e100_s0_t0_c9492ae5c/summary.json
 scratch,20,none,1,1,0.1726,0.1738,73,results/third_presentation/final/scratch/cifar100/resnet50/k20/none/e100_s1_t1_cc2f2ce29/summary.json
 scratch,20,none,2,2,0.1838,0.1801,63,results/third_presentation/final/scratch/cifar100/resnet50/k20/none/e100_s2_t2_c6579e6ee/summary.json
+scratch,20,mixup,0,0,0.1294,0.1306,98,results/third_presentation/screening/scratch/cifar100/resnet50/k20/mixup/e100_s0_t0_ca49e8da5/summary.json
+scratch,20,mixup,1,1,0.144,0.1499,67,results/third_presentation/final/scratch/cifar100/resnet50/k20/mixup/e100_s1_t1_cd2b41cf9/summary.json
+scratch,20,mixup,2,2,0.1356,0.1434,84,results/third_presentation/final/scratch/cifar100/resnet50/k20/mixup/e100_s2_t2_c2ce5c57c/summary.json
 scratch,20,cutmix,0,0,0.1554,0.1565,60,results/third_presentation/screening/scratch/cifar100/resnet50/k20/cutmix/e100_s0_t0_ca3081695/summary.json
 scratch,20,cutmix,1,1,0.1428,0.1491,92,results/third_presentation/final/scratch/cifar100/resnet50/k20/cutmix/e100_s1_t1_c517758cc/summary.json
 scratch,20,cutmix,2,2,0.1668,0.1607,84,results/third_presentation/final/scratch/cifar100/resnet50/k20/cutmix/e100_s2_t2_cbdee25fb/summary.json
@@ -11,6 +14,9 @@ scratch,20,simcutmix,2,2,0.1624,0.1683,70,results/third_presentation/final/scrat
 scratch,50,none,0,0,0.3148,0.3003,99,results/third_presentation/screening/scratch/cifar100/resnet50/k50/none/e100_s0_t0_ccc4bcf05/summary.json
 scratch,50,none,1,1,0.3306,0.3188,77,results/third_presentation/final/scratch/cifar100/resnet50/k50/none/e100_s1_t1_cffa5f5d5/summary.json
 scratch,50,none,2,2,0.3124,0.3155,81,results/third_presentation/final/scratch/cifar100/resnet50/k50/none/e100_s2_t2_c271661ac/summary.json
+scratch,50,mixup,0,0,0.2594,0.2658,93,results/third_presentation/screening/scratch/cifar100/resnet50/k50/mixup/e100_s0_t0_c11dc66ab/summary.json
+scratch,50,mixup,1,1,0.27,0.2746,86,results/third_presentation/final/scratch/cifar100/resnet50/k50/mixup/e100_s1_t1_cc37ffa58/summary.json
+scratch,50,mixup,2,2,0.2718,0.2842,81,results/third_presentation/final/scratch/cifar100/resnet50/k50/mixup/e100_s2_t2_c44bc16a7/summary.json
 scratch,50,cutmix,0,0,0.3042,0.2947,97,results/third_presentation/screening/scratch/cifar100/resnet50/k50/cutmix/e100_s0_t0_c90c79603/summary.json
 scratch,50,cutmix,1,1,0.3212,0.3139,77,results/third_presentation/final/scratch/cifar100/resnet50/k50/cutmix/e100_s1_t1_cbd3a83ab/summary.json
 scratch,50,cutmix,2,2,0.2966,0.2942,86,results/third_presentation/final/scratch/cifar100/resnet50/k50/cutmix/e100_s2_t2_c2142721d/summary.json
@@ -20,6 +26,9 @@ scratch,50,simcutmix,2,2,0.3254,0.3261,99,results/third_presentation/final/scrat
 scratch,100,none,0,0,0.519,0.5293,73,results/third_presentation/screening/scratch/cifar100/resnet50/k100/none/e100_s0_t0_c1fbe08fa/summary.json
 scratch,100,none,1,1,0.5124,0.5159,86,results/third_presentation/final/scratch/cifar100/resnet50/k100/none/e100_s1_t1_c08b84765/summary.json
 scratch,100,none,2,2,0.5106,0.5198,75,results/third_presentation/final/scratch/cifar100/resnet50/k100/none/e100_s2_t2_c14ab7100/summary.json
+scratch,100,mixup,0,0,0.5128,0.505,91,results/third_presentation/screening/scratch/cifar100/resnet50/k100/mixup/e100_s0_t0_ccc4ffbc1/summary.json
+scratch,100,mixup,1,1,0.4896,0.4974,63,results/third_presentation/final/scratch/cifar100/resnet50/k100/mixup/e100_s1_t1_cc6008ef7/summary.json
+scratch,100,mixup,2,2,0.4936,0.5122,97,results/third_presentation/final/scratch/cifar100/resnet50/k100/mixup/e100_s2_t2_c5d5d5fb4/summary.json
 scratch,100,cutmix,0,0,0.5298,0.5158,70,results/third_presentation/screening/scratch/cifar100/resnet50/k100/cutmix/e100_s0_t0_c55c73c96/summary.json
 scratch,100,cutmix,1,1,0.5152,0.5226,86,results/third_presentation/final/scratch/cifar100/resnet50/k100/cutmix/e100_s1_t1_ced518243/summary.json
 scratch,100,cutmix,2,2,0.516,0.5197,74,results/third_presentation/final/scratch/cifar100/resnet50/k100/cutmix/e100_s2_t2_c9e3f9a5a/summary.json
@@ -29,6 +38,9 @@ scratch,100,simcutmix,2,2,0.5186,0.5265,94,results/third_presentation/final/scra
 scratch,200,none,0,0,0.664,0.6614,68,results/third_presentation/screening/scratch/cifar100/resnet50/k200/none/e100_s0_t0_cd131d2af/summary.json
 scratch,200,none,1,1,0.6722,0.6622,58,results/third_presentation/final/scratch/cifar100/resnet50/k200/none/e100_s1_t1_cc41ddb9b/summary.json
 scratch,200,none,2,2,0.6608,0.6594,99,results/third_presentation/final/scratch/cifar100/resnet50/k200/none/e100_s2_t2_cc5656c2f/summary.json
+scratch,200,mixup,0,0,0.6738,0.6707,72,results/third_presentation/screening/scratch/cifar100/resnet50/k200/mixup/e100_s0_t0_c8efbe93e/summary.json
+scratch,200,mixup,1,1,0.661,0.6677,97,results/third_presentation/final/scratch/cifar100/resnet50/k200/mixup/e100_s1_t1_c2a1f0ee4/summary.json
+scratch,200,mixup,2,2,0.6666,0.6749,98,results/third_presentation/final/scratch/cifar100/resnet50/k200/mixup/e100_s2_t2_cdb3e31d8/summary.json
 scratch,200,cutmix,0,0,0.6788,0.6818,81,results/third_presentation/screening/scratch/cifar100/resnet50/k200/cutmix/e100_s0_t0_c0f3d62fc/summary.json
 scratch,200,cutmix,1,1,0.6796,0.6801,84,results/third_presentation/final/scratch/cifar100/resnet50/k200/cutmix/e100_s1_t1_c28ee54c5/summary.json
 scratch,200,cutmix,2,2,0.6768,0.6809,71,results/third_presentation/final/scratch/cifar100/resnet50/k200/cutmix/e100_s2_t2_c6c03e56d/summary.json
@@ -38,6 +50,9 @@ scratch,200,simcutmix,2,2,0.6784,0.675,64,results/third_presentation/final/scrat
 scratch,300,none,0,0,0.7234,0.7243,72,results/third_presentation/screening/scratch/cifar100/resnet50/k300/none/e100_s0_t0_c05892877/summary.json
 scratch,300,none,1,1,0.7282,0.7233,93,results/third_presentation/final/scratch/cifar100/resnet50/k300/none/e100_s1_t1_ce58d1431/summary.json
 scratch,300,none,2,2,0.7298,0.722,77,results/third_presentation/final/scratch/cifar100/resnet50/k300/none/e100_s2_t2_c7794b138/summary.json
+scratch,300,mixup,0,0,0.7356,0.732,94,results/third_presentation/screening/scratch/cifar100/resnet50/k300/mixup/e100_s0_t0_ca6534a2a/summary.json
+scratch,300,mixup,1,1,0.7306,0.7317,90,results/third_presentation/final/scratch/cifar100/resnet50/k300/mixup/e100_s1_t1_ca0afcfb1/summary.json
+scratch,300,mixup,2,2,0.7306,0.7354,100,results/third_presentation/final/scratch/cifar100/resnet50/k300/mixup/e100_s2_t2_c38ffa4ce/summary.json
 scratch,300,cutmix,0,0,0.7486,0.7491,96,results/third_presentation/screening/scratch/cifar100/resnet50/k300/cutmix/e100_s0_t0_c05c80718/summary.json
 scratch,300,cutmix,1,1,0.7392,0.7461,61,results/third_presentation/final/scratch/cifar100/resnet50/k300/cutmix/e100_s1_t1_c0e594405/summary.json
 scratch,300,cutmix,2,2,0.7426,0.7475,64,results/third_presentation/final/scratch/cifar100/resnet50/k300/cutmix/e100_s2_t2_cc691d5ce/summary.json
@@ -47,6 +62,9 @@ scratch,300,simcutmix,2,2,0.7394,0.7417,83,results/third_presentation/final/scra
 scratch,450,none,0,0,0.7204,0.7166,49,results/third_presentation/screening/scratch/cifar100/resnet50/k450/none/e50_s0_t0_c9508ca03/summary.json
 scratch,450,none,0,1,0.7196,0.7188,41,results/third_presentation/final/scratch/cifar100/resnet50/k450/none/e50_s0_t1_c535fa629/summary.json
 scratch,450,none,0,2,0.6918,0.6888,47,results/third_presentation/final/scratch/cifar100/resnet50/k450/none/e50_s0_t2_c682e7b22/summary.json
+scratch,450,mixup,0,0,0.7068,0.7042,45,results/third_presentation/screening/scratch/cifar100/resnet50/k450/mixup/e50_s0_t0_c621e9b6d/summary.json
+scratch,450,mixup,0,1,0.656,0.6708,49,results/third_presentation/final/scratch/cifar100/resnet50/k450/mixup/e50_s0_t1_c4f941f48/summary.json
+scratch,450,mixup,0,2,0.705,0.7103,48,results/third_presentation/final/scratch/cifar100/resnet50/k450/mixup/e50_s0_t2_cd0de558d/summary.json
 scratch,450,cutmix,0,0,0.7376,0.7322,44,results/third_presentation/screening/scratch/cifar100/resnet50/k450/cutmix/e50_s0_t0_ceb432ea4/summary.json
 scratch,450,cutmix,0,1,0.715,0.7156,47,results/third_presentation/final/scratch/cifar100/resnet50/k450/cutmix/e50_s0_t1_caebbd1f2/summary.json
 scratch,450,cutmix,0,2,0.7206,0.712,50,results/third_presentation/final/scratch/cifar100/resnet50/k450/cutmix/e50_s0_t2_c774cf8ac/summary.json
@@ -56,6 +74,9 @@ scratch,450,simcutmix,0,2,0.714,0.7129,45,results/third_presentation/final/scrat
 pretrained,20,none,0,0,0.6716,0.6673,89,results/comparison_v1/pretrained/cifar100/resnet50/k20/none/e100_s0_t0_c4bdc921c/summary.json
 pretrained,20,none,1,1,0.666,0.6653,58,results/third_presentation/final/pretrained/cifar100/resnet50/k20/none/e100_s1_t1_c24dfdc7d/summary.json
 pretrained,20,none,2,2,0.6718,0.6718,57,results/third_presentation/final/pretrained/cifar100/resnet50/k20/none/e100_s2_t2_cd91a3059/summary.json
+pretrained,20,mixup,0,0,0.6686,0.6766,98,results/comparison_v1/pretrained/cifar100/resnet50/k20/mixup/e100_s0_t0_ced9f6a55/summary.json
+pretrained,20,mixup,1,1,0.66,0.6632,67,results/third_presentation/final/pretrained/cifar100/resnet50/k20/mixup/e100_s1_t1_c9d226d50/summary.json
+pretrained,20,mixup,2,2,0.6698,0.6753,84,results/third_presentation/final/pretrained/cifar100/resnet50/k20/mixup/e100_s2_t2_c3da9ce9c/summary.json
 pretrained,20,cutmix,0,0,0.6944,0.6888,94,results/comparison_v1/pretrained/cifar100/resnet50/k20/cutmix/e100_s0_t0_ccf7df390/summary.json
 pretrained,20,cutmix,1,1,0.6952,0.6962,70,results/third_presentation/final/pretrained/cifar100/resnet50/k20/cutmix/e100_s1_t1_c1ed9e34e/summary.json
 pretrained,20,cutmix,2,2,0.7038,0.7053,74,results/third_presentation/final/pretrained/cifar100/resnet50/k20/cutmix/e100_s2_t2_ccdadd3fa/summary.json
@@ -65,6 +86,9 @@ pretrained,20,simcutmix,2,2,0.6778,0.6783,52,results/third_presentation/final/pr
 pretrained,50,none,0,0,0.73,0.729,88,results/comparison_v1/pretrained/cifar100/resnet50/k50/none/e100_s0_t0_ce01608fa/summary.json
 pretrained,50,none,1,1,0.723,0.726,79,results/third_presentation/final/pretrained/cifar100/resnet50/k50/none/e100_s1_t1_c17c6883c/summary.json
 pretrained,50,none,2,2,0.725,0.7263,85,results/third_presentation/final/pretrained/cifar100/resnet50/k50/none/e100_s2_t2_c1c2bc04b/summary.json
+pretrained,50,mixup,0,0,0.7314,0.7347,94,results/comparison_v1/pretrained/cifar100/resnet50/k50/mixup/e100_s0_t0_cfa519cd6/summary.json
+pretrained,50,mixup,1,1,0.7382,0.7375,99,results/third_presentation/final/pretrained/cifar100/resnet50/k50/mixup/e100_s1_t1_cc8d99a13/summary.json
+pretrained,50,mixup,2,2,0.7286,0.7373,81,results/third_presentation/final/pretrained/cifar100/resnet50/k50/mixup/e100_s2_t2_c99dd7769/summary.json
 pretrained,50,cutmix,0,0,0.7578,0.7575,94,results/comparison_v1/pretrained/cifar100/resnet50/k50/cutmix/e100_s0_t0_c891782aa/summary.json
 pretrained,50,cutmix,1,1,0.7552,0.7597,85,results/third_presentation/final/pretrained/cifar100/resnet50/k50/cutmix/e100_s1_t1_c777afcb2/summary.json
 pretrained,50,cutmix,2,2,0.7594,0.7568,90,results/third_presentation/final/pretrained/cifar100/resnet50/k50/cutmix/e100_s2_t2_c625e23f9/summary.json
@@ -74,6 +98,9 @@ pretrained,50,simcutmix,2,2,0.7464,0.7449,90,results/third_presentation/final/pr
 pretrained,100,none,0,0,0.7674,0.7688,89,results/comparison_v1/pretrained/cifar100/resnet50/k100/none/e100_s0_t0_c115b19a0/summary.json
 pretrained,100,none,1,1,0.7586,0.7645,78,results/third_presentation/final/pretrained/cifar100/resnet50/k100/none/e100_s1_t1_cce8683ef/summary.json
 pretrained,100,none,2,2,0.7594,0.7582,87,results/third_presentation/final/pretrained/cifar100/resnet50/k100/none/e100_s2_t2_c446f35c1/summary.json
+pretrained,100,mixup,0,0,0.7742,0.7772,67,results/comparison_v1/pretrained/cifar100/resnet50/k100/mixup/e100_s0_t0_c08fb9990/summary.json
+pretrained,100,mixup,1,1,0.7734,0.7804,87,results/third_presentation/final/pretrained/cifar100/resnet50/k100/mixup/e100_s1_t1_c9b04709c/summary.json
+pretrained,100,mixup,2,2,0.7774,0.7794,98,results/third_presentation/final/pretrained/cifar100/resnet50/k100/mixup/e100_s2_t2_c7270aac5/summary.json
 pretrained,100,cutmix,0,0,0.7874,0.7989,96,results/comparison_v1/pretrained/cifar100/resnet50/k100/cutmix/e100_s0_t0_c85d9df2f/summary.json
 pretrained,100,cutmix,1,1,0.7952,0.7973,93,results/third_presentation/final/pretrained/cifar100/resnet50/k100/cutmix/e100_s1_t1_c6b935199/summary.json
 pretrained,100,cutmix,2,2,0.7844,0.7934,98,results/third_presentation/final/pretrained/cifar100/resnet50/k100/cutmix/e100_s2_t2_cb50bb488/summary.json
@@ -83,6 +110,9 @@ pretrained,100,simcutmix,2,2,0.777,0.7739,54,results/third_presentation/final/pr
 pretrained,200,none,0,0,0.7924,0.8072,88,results/third_presentation/screening/pretrained/cifar100/resnet50/k200/none/e100_s0_t0_c115d1e9e/summary.json
 pretrained,200,none,1,1,0.8068,0.8086,83,results/third_presentation/final/pretrained/cifar100/resnet50/k200/none/e100_s1_t1_ca2564453/summary.json
 pretrained,200,none,2,2,0.7992,0.8041,83,results/third_presentation/final/pretrained/cifar100/resnet50/k200/none/e100_s2_t2_c931cb656/summary.json
+pretrained,200,mixup,0,0,0.8094,0.8096,64,results/third_presentation/screening/pretrained/cifar100/resnet50/k200/mixup/e100_s0_t0_c52798e81/summary.json
+pretrained,200,mixup,1,1,0.8092,0.8124,64,results/third_presentation/final/pretrained/cifar100/resnet50/k200/mixup/e100_s1_t1_cb92eccff/summary.json
+pretrained,200,mixup,2,2,0.812,0.8143,98,results/third_presentation/final/pretrained/cifar100/resnet50/k200/mixup/e100_s2_t2_c45db533c/summary.json
 pretrained,200,cutmix,0,0,0.8238,0.8285,82,results/third_presentation/screening/pretrained/cifar100/resnet50/k200/cutmix/e100_s0_t0_c87bdc8d0/summary.json
 pretrained,200,cutmix,1,1,0.8222,0.8253,95,results/third_presentation/final/pretrained/cifar100/resnet50/k200/cutmix/e100_s1_t1_c5d87acec/summary.json
 pretrained,200,cutmix,2,2,0.8178,0.8299,68,results/third_presentation/final/pretrained/cifar100/resnet50/k200/cutmix/e100_s2_t2_c7bcde1b4/summary.json
@@ -92,6 +122,9 @@ pretrained,200,simcutmix,2,2,0.8188,0.815,51,results/third_presentation/final/pr
 pretrained,300,none,0,0,0.8222,0.8253,78,results/third_presentation/screening/pretrained/cifar100/resnet50/k300/none/e100_s0_t0_c5437cb38/summary.json
 pretrained,300,none,1,1,0.8206,0.8218,52,results/third_presentation/final/pretrained/cifar100/resnet50/k300/none/e100_s1_t1_ce82b25ff/summary.json
 pretrained,300,none,2,2,0.8192,0.8263,77,results/third_presentation/final/pretrained/cifar100/resnet50/k300/none/e100_s2_t2_cdef20208/summary.json
+pretrained,300,mixup,0,0,0.8248,0.8342,94,results/third_presentation/screening/pretrained/cifar100/resnet50/k300/mixup/e100_s0_t0_cce2a12a4/summary.json
+pretrained,300,mixup,1,1,0.8264,0.8328,78,results/third_presentation/final/pretrained/cifar100/resnet50/k300/mixup/e100_s1_t1_c23e78bb7/summary.json
+pretrained,300,mixup,2,2,0.8254,0.8333,77,results/third_presentation/final/pretrained/cifar100/resnet50/k300/mixup/e100_s2_t2_c285fc8fc/summary.json
 pretrained,300,cutmix,0,0,0.8376,0.8453,79,results/third_presentation/screening/pretrained/cifar100/resnet50/k300/cutmix/e100_s0_t0_cef1e13e8/summary.json
 pretrained,300,cutmix,1,1,0.8356,0.8414,74,results/third_presentation/final/pretrained/cifar100/resnet50/k300/cutmix/e100_s1_t1_c3499c00c/summary.json
 pretrained,300,cutmix,2,2,0.8438,0.8386,69,results/third_presentation/final/pretrained/cifar100/resnet50/k300/cutmix/e100_s2_t2_c9f3b80ff/summary.json
@@ -101,6 +134,9 @@ pretrained,300,simcutmix,2,2,0.837,0.836,71,results/third_presentation/final/pre
 pretrained,450,none,0,0,0.7816,0.7853,44,results/third_presentation/screening/pretrained/cifar100/resnet50/k450/none/e50_s0_t0_c4bcb52e6/summary.json
 pretrained,450,none,0,1,0.7822,0.7838,44,results/third_presentation/final/pretrained/cifar100/resnet50/k450/none/e50_s0_t1_cfab2de52/summary.json
 pretrained,450,none,0,2,0.7806,0.781,43,results/third_presentation/final/pretrained/cifar100/resnet50/k450/none/e50_s0_t2_c7f9f1253/summary.json
+pretrained,450,mixup,0,0,0.7768,0.7767,47,results/third_presentation/screening/pretrained/cifar100/resnet50/k450/mixup/e50_s0_t0_cf13a44b9/summary.json
+pretrained,450,mixup,0,1,0.7782,0.7778,48,results/third_presentation/final/pretrained/cifar100/resnet50/k450/mixup/e50_s0_t1_ccc3cc059/summary.json
+pretrained,450,mixup,0,2,0.7762,0.7741,43,results/third_presentation/final/pretrained/cifar100/resnet50/k450/mixup/e50_s0_t2_c6a4ac53b/summary.json
 pretrained,450,cutmix,0,0,0.7944,0.7962,46,results/third_presentation/screening/pretrained/cifar100/resnet50/k450/cutmix/e50_s0_t0_c862d0c05/summary.json
 pretrained,450,cutmix,0,1,0.7946,0.799,49,results/third_presentation/final/pretrained/cifar100/resnet50/k450/cutmix/e50_s0_t1_cba1ea8f9/summary.json
 pretrained,450,cutmix,0,2,0.8018,0.7993,50,results/third_presentation/final/pretrained/cifar100/resnet50/k450/cutmix/e50_s0_t2_c1ff3454b/summary.json
