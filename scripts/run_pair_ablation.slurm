@@ -18,10 +18,13 @@ Usage:
 STRATEGY:
   random | same_class | most_similar | middle_similarity | less_similar | different_label
 MODE:
-  smoke | screen
+  smoke | screen | evaluate
 
 All conditions use CutMix alpha=1 and probability=0.5 so the comparison
 isolates partner selection as closely as possible.
+evaluate loads an existing guided best-validation checkpoint without
+retraining. Evaluate the reused random CutMix control with
+run_resnet_comparison.slurm instead.
 EOF
 }
 
@@ -39,11 +42,15 @@ case "$strategy" in
     random|same_class|most_similar|middle_similarity|less_similar|different_label) ;;
     *) echo "Invalid strategy: $strategy" >&2; exit 2 ;;
 esac
-case "$run_mode" in smoke|screen) ;; *) echo "Invalid mode: $run_mode" >&2; exit 2 ;; esac
+case "$run_mode" in smoke|screen|evaluate) ;; *) echo "Invalid mode: $run_mode" >&2; exit 2 ;; esac
 case "$subset_seed" in 0|1|2) ;; *) echo "Invalid subset seed" >&2; exit 2 ;; esac
 [[ "$train_seed" =~ ^[0-9]+$ ]] || { echo "Invalid training seed" >&2; exit 2; }
 if [[ "$k" == "450" && "$subset_seed" != "0" ]]; then
     echo "k=450 only has subset seed 0." >&2
+    exit 2
+fi
+if [[ "$run_mode" == "evaluate" && "$strategy" == "random" ]]; then
+    echo "Random CutMix is reused from the comparison matrix; evaluate it with run_resnet_comparison.slurm." >&2
     exit 2
 fi
 
@@ -75,9 +82,12 @@ if [[ "$k" == "450" ]]; then
     milestones=(15 30 40)
 fi
 output_root="results/third_presentation/ablation/$initialization"
+evaluation_args=(--skip-test)
 if [[ "$run_mode" == "smoke" ]]; then
     epochs=1
     output_root="results/smoke/pair_ablation/$initialization"
+elif [[ "$run_mode" == "evaluate" ]]; then
+    evaluation_args=(--evaluate-only)
 fi
 
 init_arg=--pretrained
@@ -125,7 +135,7 @@ train_args=(
     --weight-decay 0.0005 --lr-milestones "${milestones[@]}" --lr-gamma "$gamma"
     --cutmix-alpha 1 --cutmix-prob 0.5 --mixup-alpha 1
     --num-workers "${SLURM_CPUS_PER_TASK:-2}" --output-root "$output_root"
-    --skip-test "${guided_args[@]}"
+    "${evaluation_args[@]}" "${guided_args[@]}"
 )
 
 echo "Started: $(date --iso-8601=seconds)"

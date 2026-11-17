@@ -37,6 +37,8 @@ MANIFEST_COLUMNS = [
     "neighbor_k",
     "neighbor_rank_window",
     "pair_sampling",
+    "pair_curriculum",
+    "curriculum_transition_epochs",
     "mixup_alpha",
     "cutmix_alpha",
     "mix_prob",
@@ -192,6 +194,12 @@ def build_rows(results_root: Path, repo_root: Path) -> list[dict[str, str]]:
             "neighbor_k": optional_str(summary.get("neighbor_k")) if is_guided else "",
             "neighbor_rank_window": rank_window(summary) if is_guided else "",
             "pair_sampling": optional_str(summary.get("pair_sampling")) if is_guided else "",
+            "pair_curriculum": optional_str(summary.get("pair_curriculum", "fixed")) if is_guided else "",
+            "curriculum_transition_epochs": (
+                "-".join(str(epoch) for epoch in summary.get("curriculum_transition_epochs", []))
+                if is_guided
+                else ""
+            ),
             "mixup_alpha": fmt_float(summary.get("mixup_alpha")),
             "cutmix_alpha": fmt_float(summary.get("cutmix_alpha")),
             "mix_prob": fmt_float(summary.get("mix_prob")) if is_guided else "",

@@ -1,5 +1,9 @@
 # Recommended Job Matrix for the Third Presentation
 
+Status: executed. This file preserves the pre-execution plan and rationale;
+use `experiment_evidence_status.md` and the result documents for current
+coverage and conclusions.
+
 This document turns the supervisor feedback in
 [`second_presentation_feedback_summary.md`](second_presentation_feedback_summary.md)
 into a focused, staged cluster plan. It is intended as the handoff document for
