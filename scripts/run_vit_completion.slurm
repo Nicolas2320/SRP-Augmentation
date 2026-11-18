@@ -16,11 +16,11 @@ Usage:
   sbatch scripts/run_vit_completion.slurm K METHOD MODE SUBSET_SEED TRAIN_SEED
 
 Arguments:
-  K            300 | 450
+  K            20 | 50 | 100 | 300 | 450
   METHOD       none | mixup | cutmix | augmix | simmixup | simcutmix
   MODE         smoke | screen | final | evaluate
-  SUBSET_SEED  0 (the frozen single-seed completion uses subset seed 0)
-  TRAIN_SEED   0 (the frozen single-seed completion uses training seed 0)
+  SUBSET_SEED  0 | 1 | 2 (k=450 requires 0; otherwise match TRAIN_SEED)
+  TRAIN_SEED   0 | 1 | 2
 
 The completion recipe uses the historical scratch CIFAR ViT architecture and
 100 epochs for every final method. AugMix retains its historical optimizer
@@ -40,7 +40,7 @@ subset_seed="$4"
 train_seed="$5"
 
 case "$k" in
-    300|450) ;;
+    20|50|100|300|450) ;;
     *) echo "Invalid k: $k" >&2; usage >&2; exit 2 ;;
 esac
 
@@ -54,8 +54,23 @@ case "$mode" in
     *) echo "Invalid mode: $mode" >&2; usage >&2; exit 2 ;;
 esac
 
-if [[ "$subset_seed" != "0" || "$train_seed" != "0" ]]; then
-    echo "The frozen ViT completion is single-seed only: subset_seed=0, train_seed=0." >&2
+case "$subset_seed" in
+    0|1|2) ;;
+    *) echo "Invalid subset seed: $subset_seed" >&2; usage >&2; exit 2 ;;
+esac
+
+case "$train_seed" in
+    0|1|2) ;;
+    *) echo "Invalid training seed: $train_seed" >&2; usage >&2; exit 2 ;;
+esac
+
+if [[ "$k" == "450" && "$subset_seed" != "0" ]]; then
+    echo "k=450 uses the complete post-validation pool and requires subset seed 0." >&2
+    exit 2
+fi
+
+if [[ "$k" != "450" && "$subset_seed" != "$train_seed" ]]; then
+    echo "For k<450, use paired subset/train seeds: $train_seed/$train_seed." >&2
     exit 2
 fi
 
@@ -156,7 +171,7 @@ echo "Started: $(date --iso-8601=seconds)"
 echo "Host: $(hostname)"
 echo "Git commit: $(git rev-parse HEAD)"
 echo "Conda environment: $conda_env"
-echo "Frozen ViT completion: k=$k method=$method mode=$mode seed=$train_seed"
+echo "Frozen ViT completion: k=$k method=$method mode=$mode subset_seed=$subset_seed train_seed=$train_seed"
 python --version
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 printf 'Command:'

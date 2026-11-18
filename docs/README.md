@@ -21,6 +21,7 @@ and historical project records. Last reviewed: 2026-11-14.
 | [Experiment evidence status](experiment_evidence_status.md) | Final, screening, historical, and pending experiment inventory | Current |
 | [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Delegated architecture-transfer matrix and execution gates | Planned |
 | [Single-seed ViT completion](vit_completion_runbook.md) | Frozen 10-job k=300/k=450 completion matrix and cluster commands | Ready |
+| [Three-seed ViT completion](vit_three_seed_runbook.md) | Frozen 60-job seeds-1/2 matrix and cluster commands | Ready |
 | [Remaining cluster jobs](remaining_cluster_jobs.md) | Completed curriculum, Tiny ImageNet, and MixUp stages | Complete |
 
 ## Evidence
