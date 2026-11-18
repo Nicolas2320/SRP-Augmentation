@@ -20,6 +20,7 @@ and historical project records. Last reviewed: 2026-11-14.
 | [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and completed negative result | Complete |
 | [Experiment evidence status](experiment_evidence_status.md) | Final, screening, historical, and pending experiment inventory | Current |
 | [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Delegated architecture-transfer matrix and execution gates | Planned |
+| [Single-seed ViT completion](vit_completion_runbook.md) | Frozen 10-job k=300/k=450 completion matrix and cluster commands | Ready |
 | [Remaining cluster jobs](remaining_cluster_jobs.md) | Completed curriculum, Tiny ImageNet, and MixUp stages | Complete |
 
 ## Evidence
