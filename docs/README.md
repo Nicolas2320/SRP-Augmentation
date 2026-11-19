@@ -1,7 +1,7 @@
 # Documentation Index
 
 This directory contains current operating documentation, generated evidence,
-and historical project records. Last reviewed: 2026-11-14.
+and historical project records. Last reviewed: 2026-11-19.
 
 ## Current Guides
 
@@ -14,14 +14,14 @@ and historical project records. Last reviewed: 2026-11-14.
 | [ResNet50 comparison v1](resnet_comparison_v1.md) | Fixed protocol, run matrix, and known deviations | Current |
 | [Project status](project_status.md) | Evidence inventory, verified results, gaps, and next work | Current |
 | [Presentation outline](presentation_outline.md) | Suggested presentation based on the current evidence | Current |
-| [CIFAR-100 confirmation results](third_presentation_results.md) | Three-seed final-test tables and paired effects | Current |
+| [Consolidated final results](third_presentation_results.md) | Three-seed ResNet50 and ViT final-test tables, paired effects, and cross-architecture conclusions | Current |
 | [Pair-selection ablation results](pair_selection_ablation_results.md) | Controlled validation-only partner-selection comparison | Current |
 | [Tiny ImageNet results](tiny_imagenet_results.md) | Three-seed cross-dataset confirmation and limitations | Current |
 | [Easy-to-hard curriculum plan](easy_to_hard_curriculum_plan.md) | Frozen optional-extension design, controls, and completed negative result | Complete |
 | [Experiment evidence status](experiment_evidence_status.md) | Final, screening, historical, and pending experiment inventory | Current |
-| [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Delegated architecture-transfer matrix and execution gates | Planned |
-| [Single-seed ViT completion](vit_completion_runbook.md) | Frozen 10-job k=300/k=450 completion matrix and cluster commands | Ready |
-| [Three-seed ViT completion](vit_three_seed_runbook.md) | Frozen 60-job seeds-1/2 matrix and cluster commands | Ready |
+| [Minimal ViT teammate plan](vit_teammate_experiment_plan.md) | Original delegated architecture-transfer proposal, superseded by the completed full matrix | Superseded |
+| [Single-seed ViT completion](vit_completion_runbook.md) | Executed 10-job k=300/k=450 completion matrix and cluster commands | Complete |
+| [Three-seed ViT completion](vit_three_seed_runbook.md) | Executed 60-job seeds-1/2 matrix and cluster commands | Complete |
 | [Remaining cluster jobs](remaining_cluster_jobs.md) | Completed curriculum, Tiny ImageNet, and MixUp stages | Complete |
 
 ## Evidence
